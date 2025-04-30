@@ -1,27 +1,62 @@
-"""Functions for preprocessing the data."""
+"""Functions for preprocessing credit card default prediction data.
+
+This module handles the preprocessing pipeline for credit card default prediction,
+including data download, feature engineering, and transformations. It implements
+domain-specific preprocessing steps tailored for credit risk assessment.
+
+Functions:
+    get_raw_data: Download dataset from Kaggle
+    encode_categorical_features: Encode categorical features
+    scale_amount_features: Scale amount features using StandardScaler
+    engineer_features: Create new features from existing data
+    preprocess_df: Run complete preprocessing pipeline
+
+Example:
+    >>> from ARISA_DSML.preproc import preprocess_df
+    >>> processed_path = preprocess_df("raw_credit_data.csv")
+    >>> print(f"Processed data saved to: {processed_path}")
+"""
 
 import os
 from pathlib import Path
-import re
 import zipfile
 
 from kaggle.api.kaggle_api_extended import KaggleApi
 from loguru import logger
+import numpy as np
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
-from ARISA_DSML.config import DATASET, DATASET_TEST, PROCESSED_DATA_DIR, RAW_DATA_DIR
+from ARISA_DSML.config import DATASET, PROCESSED_DATA_DIR, RAW_DATA_DIR
+from ARISA_DSML.validation import validate_dataset
 
 
-def get_raw_data(dataset:str=DATASET, dataset_test:str=DATASET_TEST)->None:
+def get_raw_data(dataset: str = DATASET) -> None:
+    """Download credit card default dataset from Kaggle.
+    
+    Uses the Kaggle API to download the UCI ML Credit Card Default Dataset.
+    Requires Kaggle API credentials to be properly configured.
+    
+    Args:
+        dataset: Kaggle dataset identifier (default: from config.py)
+        
+    Returns:
+        None. Files are downloaded to RAW_DATA_DIR
+        
+    Raises:
+        KaggleApiError: If authentication fails or dataset not found
+        
+    Example:
+        >>> get_raw_data("uciml/default-of-credit-card-clients-dataset")
+    """
     api = KaggleApi()
     api.authenticate()
 
     download_folder = Path(RAW_DATA_DIR)
-    zip_path = download_folder / "titanic.zip"
+    zip_path = download_folder / "credit_default.zip"
 
     logger.info(f"RAW_DATA_DIR is: {RAW_DATA_DIR}")
-    api.competition_download_files(dataset, path=str(download_folder))
-    api.dataset_download_files(dataset_test, path=str(download_folder), unzip=True)
+    api.dataset_download_files(dataset, path=str(download_folder))
 
     with zipfile.ZipFile(zip_path, "r") as zip_ref:
         zip_ref.extractall(str(download_folder))
@@ -29,58 +64,214 @@ def get_raw_data(dataset:str=DATASET, dataset_test:str=DATASET_TEST)->None:
     Path.unlink(zip_path)
 
 
-def extract_title(name:str)-> str|None:
-    """Extract title from passenger name."""
-    match = re.search(r",\s*([\w\s]+)\.", name)
+def encode_categorical_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Encode categorical features for credit default prediction.
+    
+    This function performs the following encodings:
+    1. Education status (1-4) -> ['graduate', 'university', 'high_school', 'other']
+    2. Marriage status (1-3) -> ['married', 'single', 'other']
+    3. Payment status (-2 to 8) -> ['no_consumption', 'paid_full', 'revolving', 'delay_Nm']
+    4. One-hot encoding of all categorical features
+    
+    Args:
+        df: Input DataFrame containing categorical features
+        
+    Returns:
+        DataFrame with encoded categorical features
+        
+    Example:
+        >>> df = pd.DataFrame({
+        ...     "EDUCATION": [1, 2, 3],
+        ...     "MARRIAGE": [1, 2, 1],
+        ...     "PAY_0": [-1, 0, 2]
+        ... })
+        >>> encoded_df = encode_categorical_features(df)
+    """
+    # Education status encoding
+    education_map = {
+        1: "graduate",
+        2: "university",
+        3: "high_school",
+        4: "other"
+    }
+    df["EDUCATION"] = df["EDUCATION"].map(education_map)
+    
+    # Marriage status encoding
+    marriage_map = {
+        1: "married",
+        2: "single",
+        3: "other"
+    }
+    df["MARRIAGE"] = df["MARRIAGE"].map(marriage_map)
+    
+    # Payment status encoding (-2: no consumption, -1: paid in full, 0: revolving credit, 1-8: months delay)
+    payment_cols = [f"PAY_{i}" for i in range(7)]
+    for col in payment_cols:
+        if col in df.columns:
+            df[col] = df[col].map({
+                -2: "no_consumption",
+                -1: "paid_full",
+                0: "revolving",
+                **{i: f"delay_{i}m" for i in range(1, 9)}
+            })
+    
+    # One-hot encode all categorical columns
+    df = pd.get_dummies(df, columns=["EDUCATION", "MARRIAGE"] + payment_cols)
+    
+    return df
 
-    return match.group(1) if match else None
+
+def scale_amount_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Scale amount features using StandardScaler.
+    
+    Applies standard scaling (zero mean, unit variance) to all amount-related
+    features to ensure they are on the same scale for model training.
+    Only affects columns containing 'AMOUNT' in their name.
+    
+    Args:
+        df: Input DataFrame containing amount features
+        
+    Returns:
+        DataFrame with scaled amount features
+        
+    Example:
+        >>> df = pd.DataFrame({
+        ...     "BILL_AMOUNT1": [1000, 2000, 3000],
+        ...     "PAY_AMT1": [500, 1000, 1500]
+        ... })
+        >>> scaled_df = scale_amount_features(df)
+    """
+    amount_cols = [col for col in df.columns if "AMOUNT" in col]
+    scaler = StandardScaler()
+    df[amount_cols] = scaler.fit_transform(df[amount_cols])
+    return df
 
 
-def preprocess_df(file:str|Path)->str|Path:
-    """Preprocess datasets."""
+def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Engineer new features from existing credit card data.
+    
+    Creates the following new features:
+    1. Utilization ratios:
+       - Individual ratios for each bill amount
+       - Average utilization across all months
+    2. Payment metrics:
+       - Total payment amount
+       - Average payment amount
+       - Payment trend (weighted average favoring recent months)
+       - Payment consistency (proportion of months with payments)
+    3. Bill metrics:
+       - Total bill amount
+       - Average bill amount
+       - Bill trend (weighted average favoring recent months)
+    
+    Args:
+        df: Input DataFrame containing base features
+        
+    Returns:
+        DataFrame with additional engineered features
+        
+    Example:
+        >>> df = pd.DataFrame({
+        ...     "LIMIT_BAL": [20000, 30000],
+        ...     "BILL_AMOUNT1": [5000, 10000],
+        ...     "PAY_AMT1": [2000, 3000]
+        ... })
+        >>> enhanced_df = engineer_features(df)
+    """
+    # Payment history patterns
+    bill_cols = [f"BILL_AMOUNT{i}" for i in range(1, 7)]
+    pay_cols = [f"PAY_AMT{i}" for i in range(1, 7)]
+    
+    # Calculate utilization ratios (bill amount / limit balance)
+    for i, col in enumerate(bill_cols, 1):
+        df[f"UTILIZATION_RATIO_{i}"] = df[col] / df["LIMIT_BAL"]
+    
+    # Calculate average utilization
+    df["AVG_UTILIZATION"] = df[[f"UTILIZATION_RATIO_{i}" for i in range(1, 7)]].mean(axis=1)
+    
+    # Payment amount trends
+    df["TOTAL_PAYMENT"] = df[pay_cols].sum(axis=1)
+    df["AVG_PAYMENT"] = df[pay_cols].mean(axis=1)
+    df["PAYMENT_TREND"] = (
+        df["PAY_AMT1"] * 6 + 
+        df["PAY_AMT2"] * 5 + 
+        df["PAY_AMT3"] * 4 + 
+        df["PAY_AMT4"] * 3 + 
+        df["PAY_AMT5"] * 2 + 
+        df["PAY_AMT6"]
+    ) / 21  # Weighted average giving more importance to recent payments
+    
+    # Payment consistency
+    df["PAYMENT_CONSISTENCY"] = (
+        (df[pay_cols] > 0).sum(axis=1) / len(pay_cols)
+    )
+    
+    # Bill amount trends
+    df["TOTAL_BILL"] = df[bill_cols].sum(axis=1)
+    df["AVG_BILL"] = df[bill_cols].mean(axis=1)
+    df["BILL_TREND"] = (
+        df["BILL_AMOUNT1"] * 6 + 
+        df["BILL_AMOUNT2"] * 5 + 
+        df["BILL_AMOUNT3"] * 4 + 
+        df["BILL_AMOUNT4"] * 3 + 
+        df["BILL_AMOUNT5"] * 2 + 
+        df["BILL_AMOUNT6"]
+    ) / 21
+    
+    return df
+
+
+def preprocess_df(file: str | Path) -> str | Path:
+    """Preprocess credit card default dataset.
+    
+    Applies the complete preprocessing pipeline:
+    1. Data validation and cleaning
+    2. Categorical feature encoding
+    3. Amount feature scaling
+    4. Feature engineering
+    
+    The processed dataset is saved to PROCESSED_DATA_DIR with the same
+    filename as the input file.
+    
+    Args:
+        file: Path to the raw data file
+        
+    Returns:
+        Path to the processed output file
+        
+    Example:
+        >>> input_path = "data/raw/credit_data.csv"
+        >>> output_path = preprocess_df(input_path)
+        >>> print(f"Processed data saved to: {output_path}")
+    """
     _, file_name = os.path.split(file)
     df_data = pd.read_csv(file)
-    df_data = df_data.drop(columns=["Ticket"])
-
-    df_data["Title"] = df_data["Name"].apply(extract_title)
-
-    # pattern to match a letter followed by a number
-    cabin_pattern = r"([A-Za-z]+)(\d+)"
-
-    # run pattern on Cabin to extract all matches
-    matches = df_data["Cabin"].str.extractall(cabin_pattern)
-    matches = matches.reset_index()
-
-    # create a new column for each letter and number matched
-    result = matches.pivot(index="level_0", columns="match", values=[0, 1])
-    result.columns = [f"{col[0]}_{col[1]}" for col in result.columns]
-
-    # join to original train dataframe
-    df_data = df_data.join(result[["0_0", "1_0"]])
-
-    # fill nans
-    df_data["1_0"] = df_data["1_0"].astype(float)
-    df_data = df_data.fillna({"0_0": "N", "1_0": df_data["1_0"].mean()})
-    df_data["1_0"] = df_data["1_0"].astype(int)
-
-    # rename new columns and drop old ones
-    df_data = df_data.rename(columns={"0_0": "Deck", "1_0": "CabinNumber"})
-    df_data = df_data.drop(columns=["Cabin", "Name"], axis=1)
-    df_data = df_data.fillna({"Embarked": "N", "Age": df_data["Age"].mean()})
+    
+    # Validate and clean data
+    df_data = validate_dataset(df_data)
+    
+    # Encode categorical features
+    df_data = encode_categorical_features(df_data)
+    
+    # Scale amount features
+    df_data = scale_amount_features(df_data)
+    
+    # Engineer new features
+    df_data = engineer_features(df_data)
+    
+    # Save processed data
     PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
     outfile_path = PROCESSED_DATA_DIR / file_name
     df_data.to_csv(outfile_path, index=False)
-
+    
     return outfile_path
 
 
-if __name__=="__main__":
-    # get the train and test sets from default location
-    logger.info("getting datasets")
+if __name__ == "__main__":
+    # Get the dataset from default location
+    logger.info("Getting dataset")
     get_raw_data()
-
-    # preprocess both sets
-    logger.info("preprocessing train.csv")
-    preprocess_df(RAW_DATA_DIR / "train.csv")
-    logger.info("preprocessing test.csv")
-    preprocess_df(RAW_DATA_DIR / "test.csv")
+    
+    # Preprocess the dataset
+    logger.info("Preprocessing data")
+    preprocess_df(RAW_DATA_DIR / "UCI_Credit_Card.csv")

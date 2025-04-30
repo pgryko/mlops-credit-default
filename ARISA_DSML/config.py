@@ -11,8 +11,7 @@ load_dotenv()
 PROJ_ROOT = Path(__file__).resolve().parents[1]
 logger.info(f"PROJ_ROOT path is: {PROJ_ROOT}")
 
-DATASET = "titanic"  # original competition dataset
-DATASET_TEST = "wesleyhowe/titanic-labelled-test-set"  # test set augmented with target labels
+DATASET = "uciml/default-of-credit-card-clients-dataset"
 
 DATA_DIR = PROJ_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
@@ -25,14 +24,13 @@ MODELS_DIR = PROJ_ROOT / "models"
 REPORTS_DIR = PROJ_ROOT / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"
 
-MODEL_NAME = "titanic-surv-bclass"
+MODEL_NAME = "credit-default-classifier"
 
 categorical = [
-    "Pclass",
-    "Sex",
-    "Embarked",
-    "Deck",
-    "Title",
+    "SEX",
+    "EDUCATION",
+    "MARRIAGE",
+    "PAY_0", "PAY_2", "PAY_3", "PAY_4", "PAY_5", "PAY_6"
 ]
 
-target = "Survived"
+target = "default.payment.next.month"
