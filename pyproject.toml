@@ -1,7 +1,7 @@
 [project]
-name = "arisa-mlops"
+name = "mlops-credit-default-kaggle"
 version = "0.1.0"
-description = "MLOPS project for ARISA"
+description = "MLOPS project implementing a complete MLOps pipeline for predicting credit card defaults based off kaggle"
 readme = "README.md"
 requires-python = ">=3.11.9,<4.0"
 
@@ -24,9 +24,6 @@ dependencies = [
     "scikit-learn>=1.6.1",
     "shap>=0.46.0",
 ]
-[build-system]
-requires = ["flit_core >=3.2,<4"]
-build-backend = "flit_core.buildapi"
 
 
 [tool.black]
@@ -43,6 +40,16 @@ exclude = '''
 select = ["ALL"]
 ignore = ["E731", "E266", "E501", "C901", "N803", "FBT001", "FBT002", "N806", "E231", "E225", "E227", "W391", "E252", "E226"]
 [tool.ruff.lint.isort]
-known-first-party = ["ARISA_DSML"]
 force-sort-within-sections = true
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "mypy>=1.15.0",
+    "pre-commit>=4.2.0",
+    "pylint>=3.3.6",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.1.1",
+    "ruff>=0.9.7",
+]
 
