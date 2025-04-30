@@ -21,7 +21,7 @@ The system consists of three main pipelines:
 
 ## Project Structure
 ```
-├── ARISA_DSML/          # Main package directory
+├── creditrisk/          # Main package directory
 │   ├── config.py        # Configuration and constants
 │   ├── validation.py    # Data validation
 │   ├── preproc.py      # Data preprocessing
@@ -77,33 +77,33 @@ uv pip install -e .
 Process and validate new credit card data:
 ```bash
 # Download and preprocess data
-python -m ARISA_DSML.preproc
+python -m creditrisk.preproc
 
 # Validate specific dataset
-python -m ARISA_DSML.validation --input path/to/data.csv
+python -m creditrisk.validation --input path/to/data.csv
 ```
 
 ### Training Pipeline
 Train a new model with optimized hyperparameters:
 ```bash
 # Full training pipeline with hyperparameter optimization
-python -m ARISA_DSML.train
+python -m creditrisk.train
 
 # Cross-validation only
-python -m ARISA_DSML.train --cv-only
+python -m creditrisk.train --cv-only
 
 # Quick training with default parameters
-python -m ARISA_DSML.train --quick
+python -m creditrisk.train --quick
 ```
 
 ### Prediction Pipeline
 Generate default predictions for new customers:
 ```bash
 # Batch predictions
-python -m ARISA_DSML.predict --input new_customers.csv --output predictions.csv
+python -m creditrisk.predict --input new_customers.csv --output predictions.csv
 
 # Single prediction with explanation
-python -m ARISA_DSML.predict --explain customer_data.json
+python -m creditrisk.predict --explain customer_data.json
 ```
 
 ## Model Performance
