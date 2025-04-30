@@ -1,0 +1,59 @@
+.vscode
+catboost_info
+.ipynb_checkpoints
+kaggle.json
+.venv
+__pycache__
+*.pyc
+.idea
+
+# Exclude SQLite database file
+# But keep the directory
+!.mlflow/db/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# MLflow
+.mlflow/*
+!.mlflow/artifacts/
+!.mlflow/db/
+!mlruns/
+
+# Jupyter
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# VS Code
+.vscode/
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Keep model artifacts
+!models/
+!data/processed/
+!reports/figures/
