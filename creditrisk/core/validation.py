@@ -9,11 +9,6 @@ Functions:
     detect_outliers: Detect and handle outliers using the IQR method
     validate_dataset: Run all validation checks on a dataset
 
-Example:
-    >>> import pandas as pd
-    >>> from ARISA_DSML.validation import validate_dataset
-    >>> df = pd.read_csv("credit_data.csv")
-    >>> validated_df = validate_dataset(df)
 
 """
 
