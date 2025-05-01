@@ -2,7 +2,7 @@
 # GLOBALS                                                                       #
 #################################################################################
 
-PROJECT_NAME = titanic-survival-classification
+PROJECT_NAME = credit-default-prediction
 PYTHON_VERSION = 3.11
 PYTHON_INTERPRETER = python
 
@@ -13,8 +13,8 @@ PYTHON_INTERPRETER = python
 ## Install Python Dependencies
 .PHONY: requirements
 requirements:
-	$(PYTHON_INTERPRETER) -m pip install -U pip
-	$(PYTHON_INTERPRETER) -m pip install -r requirements.txt
+	$(PYTHON_INTERPRETER) -m pip install -U pip uv
+	uv pip install -e .
 
 ## Delete all compiled Python files
 .PHONY: clean
@@ -25,7 +25,7 @@ clean:
 ## Lint using flake8 and black (use `make format` to do formatting)
 .PHONY: lint
 lint:
-	flake8 ARISA_DSML
+	flake8 creditrisk
 
 all:
 	requirements clean lint
@@ -33,21 +33,21 @@ all:
 ## Download data from Kaggle
 .PHONY: download
 download:
-	python -m ARISA_DSML.preproc
+	python -m creditrisk.data.preproc
 
 
 .PHONY: preprocess
 preprocess:
-	python -m ARISA_DSML.preproc
+	python -m creditrisk.data.preproc
 
 .PHONY: train
 train:
-	python -m ARISA_DSML.train
+	python -m creditrisk.models.train
 
 .PHONY: resolve
 resolve:
-	python -m ARISA_DSML.resolve
+	python -m creditrisk.models.resolve
 
 .PHONY: predict
 predict:
-	python -m ARISA_DSML.predict
+	python -m creditrisk.models.predict

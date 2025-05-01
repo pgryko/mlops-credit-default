@@ -9,8 +9,8 @@ on:
     paths:
       - '.mlflow/artifacts/**'
       - '.mlflow/db/**'
-      - 'ARISA_DSML/predict.py'
-      - 'ARISA_DSML/resolve.py'
+      - 'creditrisk/models/predict.py'
+      - 'creditrisk/models/resolve.py'
       - '.github/workflows/predict_on_model_change.yml'
   workflow_dispatch:
 
@@ -26,7 +26,9 @@ jobs:
           python-version: '3.11'
           
       - name: Install dependencies
-        run: make requirements
+        run: |
+          python -m pip install -U pip uv
+          uv pip install -e .
           
       - name: Download and preprocess data
         env:
