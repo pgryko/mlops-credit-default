@@ -45,24 +45,42 @@ jobs:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
           source .venv/bin/activate
+          
+          # Create necessary directories
           mkdir -p data/raw
           mkdir -p $HOME/.config/kaggle
+          
+          # Set up Kaggle credentials
           echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > $HOME/.config/kaggle/kaggle.json
           chmod 600 $HOME/.config/kaggle/kaggle.json
-          kaggle datasets list
+          
+          # Download dataset directly
+          kaggle datasets download -d uciml/default-of-credit-card-clients-dataset -p data/raw --unzip
           
       - name: Run preprocessing
         id: preprocess
         continue-on-error: true
         run: |
           source .venv/bin/activate
+          
+          # Check if dataset was downloaded successfully
+          if [ ! -f "data/raw/UCI_Credit_Card.csv" ]; then
+            echo "Error: Dataset file not found. Kaggle download may have failed."
+            exit 1
+          fi
+          
+          # Attempt preprocessing with retries
           for i in {1..3}; do
+            echo "Preprocessing attempt $i..."
             if make preprocess; then
+              echo "Preprocessing completed successfully"
               exit 0
             fi
-            echo "Attempt $i failed, retrying..."
+            echo "Attempt $i failed, retrying in 5 seconds..."
             sleep 5
           done
+          
+          echo "All preprocessing attempts failed"
           exit 1
           
       - name: Upload preprocessed data
@@ -209,4 +227,3 @@ jobs:
       #         title: 'Training failed in retraining workflow',
       #         body: `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
       #       })
-  
