@@ -254,7 +254,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
         # Payment consistency
         df["PAYMENT_CONSISTENCY"] = (df[existing_pay_cols] > 0).sum(axis=1) / len(
-            existing_pay_cols
+            existing_pay_cols,
         )
     else:
         logger.warning("No payment columns found, skipping payment metrics calculations")

@@ -13,7 +13,7 @@ import os
 # Paths - respect environment variables if set
 PROJ_ROOT = os.environ.get("PROJ_ROOT")
 if PROJ_ROOT is None:
-    PROJ_ROOT = Path(__file__).resolve().parents[1]
+    PROJ_ROOT = Path(__file__).resolve().parents[2]  # Go up one more level to reach project root
 else:
     PROJ_ROOT = Path(PROJ_ROOT)
 logger.info(f"PROJ_ROOT path is: {PROJ_ROOT}")
@@ -67,13 +67,6 @@ logger.debug(f"MODELS_DIR: {MODELS_DIR}")
 logger.debug(f"REPORTS_DIR: {REPORTS_DIR}")
 logger.debug(f"FIGURES_DIR: {FIGURES_DIR}")
 EXTERNAL_DATA_DIR = DATA_DIR / "external"
-
-MODELS_DIR = PROJ_ROOT / "models"
-
-REPORTS_DIR = PROJ_ROOT / "reports"
-FIGURES_DIR = REPORTS_DIR / "figures"
-
-MODEL_NAME = "credit-default-classifier"
 
 categorical = [
     "SEX",

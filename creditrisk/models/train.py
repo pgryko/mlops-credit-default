@@ -116,9 +116,7 @@ def run_hyperopt(
                         10.0,
                         log=True,
                     ),
-                    "class_weights": class_weights,
-                    "auto_class_weights": None,
-                    "scale_pos_weight": trial.suggest_float("scale_pos_weight", 1.0, 10.0),
+                    "class_weights": class_weights,  # Using custom class weights based on data distribution
                     "ignored_features": [0],
                 }
                 model = CatBoostClassifier(**params, verbose=0)
