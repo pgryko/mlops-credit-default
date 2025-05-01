@@ -39,12 +39,14 @@ jobs:
           uv pip install -e .
         
       - name: Create kaggle directory
-        env: 
+        env:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
+          source .venv/bin/activate
           mkdir -p $HOME/.config/kaggle
           echo "$KAGGLE_KEY" > $HOME/.config/kaggle/kaggle.json
           chmod 600 $HOME/.config/kaggle/kaggle.json
+          kaggle datasets list
           
       - name: Run preprocessing
         id: preprocess
