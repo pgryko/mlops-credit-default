@@ -4,9 +4,8 @@ on:
   push:
     branches:
       - main
-    paths:  
+    paths:
       - 'data/raw/train.csv'
-      - 'data/processed/train.csv'
       - 'creditrisk/**/*.py'
       - 'models/best_params.pkl'
       - '.github/workflows/retrain_on_change.yml'
@@ -83,8 +82,19 @@ jobs:
           echo "All preprocessing attempts failed"
           exit 1
           
-      - name: Upload preprocessed data
+      - name: Verify processed data
         if: success()
+        id: verify_preproc
+        run: |
+          # Ensure the processed directory exists and contains files
+          if [ ! -d "data/processed" ] || [ -z "$(ls -A data/processed)" ]; then
+            echo "Error: Processed data directory is empty or does not exist"
+            exit 1
+          fi
+          echo "Processed data verified successfully"
+
+      - name: Upload processed data
+        if: success() && steps.verify_preproc.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: processed-data
@@ -120,10 +130,25 @@ jobs:
           fetch-depth: 0
           
       - name: Download processed data
+        id: download
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: processed-data
           path: data/processed
+
+      - name: Verify processed data
+        id: verify
+        run: |
+          if [ ! -d "data/processed" ] || [ -z "$(ls -A data/processed)" ]; then
+            echo "Error: Failed to download or verify processed data"
+            exit 1
+          fi
+          echo "Processed data verified successfully"
+
+      - name: Fail if data verification failed
+        if: failure()
+        run: exit 1
           
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -158,6 +183,7 @@ jobs:
           exit 1
 
       - name: Update ML artifacts
+        if: success() && steps.train.outcome == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
