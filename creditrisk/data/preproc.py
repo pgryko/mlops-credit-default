@@ -259,18 +259,61 @@ def preprocess_df(file: str | Path) -> str | Path:
     df_data = engineer_features(df_data)
 
     # Save processed data
+    logger.debug(f"Saving processed data to directory: {PROCESSED_DATA_DIR}")
     PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
     outfile_path = PROCESSED_DATA_DIR / file_name
+    logger.debug(f"Writing to file: {outfile_path} (absolute: {outfile_path.resolve()})")
     df_data.to_csv(outfile_path, index=False)
+
+    # Verify the file was created
+    if outfile_path.exists():
+        logger.info(f"Successfully saved processed data to {outfile_path}")
+        logger.debug(f"File size: {outfile_path.stat().st_size} bytes")
+    else:
+        logger.error(f"Failed to save processed data to {outfile_path}")
 
     return outfile_path
 
 
 if __name__ == "__main__":
-    # Get the dataset from default location
-    logger.info("Getting dataset")
-    get_raw_data()
+    try:
+        # Log environment information
+        import os
+        import sys
 
-    # Preprocess the dataset
-    logger.info("Preprocessing data")
-    preprocess_df(RAW_DATA_DIR / "UCI_Credit_Card.csv")
+        logger.debug(f"Current working directory: {os.getcwd()}")
+        logger.debug(f"Python paths: {sys.path}")
+        logger.debug(f"Environment PROJ_ROOT: {os.environ.get('PROJ_ROOT')}")
+        logger.debug(f"Environment PYTHONPATH: {os.environ.get('PYTHONPATH')}")
+        logger.debug(f"Environment DATA_DIR: {os.environ.get('DATA_DIR')}")
+        logger.debug(f"Environment PROCESSED_DATA_DIR: {os.environ.get('PROCESSED_DATA_DIR')}")
+
+        # Get the dataset from default location
+        logger.info("Getting dataset")
+        get_raw_data()
+
+        # Check if the raw data file exists
+        raw_file_path = RAW_DATA_DIR / "UCI_Credit_Card.csv"
+        if not raw_file_path.exists():
+            logger.error(f"Raw data file not found at {raw_file_path}")
+            available_files = list(RAW_DATA_DIR.glob("*.csv"))
+            if available_files:
+                logger.info(f"Available CSV files in {RAW_DATA_DIR}: {available_files}")
+            else:
+                logger.error(f"No CSV files found in {RAW_DATA_DIR}")
+            sys.exit(1)
+        else:
+            logger.info(f"Raw data file found at {raw_file_path}")
+
+        # Preprocess the dataset
+        logger.info("Preprocessing data")
+        output_path = preprocess_df(raw_file_path)
+        logger.info(f"Preprocessing completed. Output saved to {output_path}")
+
+        # List processed files for verification
+        processed_files = list(PROCESSED_DATA_DIR.glob("*"))
+        logger.info(f"Files in processed directory: {processed_files}")
+
+    except Exception as e:
+        logger.exception(f"Error during preprocessing: {e}")
+        sys.exit(1)
