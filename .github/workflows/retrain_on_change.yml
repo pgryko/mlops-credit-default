@@ -36,6 +36,7 @@ jobs:
           uv venv
           source .venv/bin/activate
           uv pip install -e .
+          uv pip install python-dotenv  # Ensure correct dotenv package
         
       - name: Setup environment
         run: |
@@ -81,14 +82,21 @@ jobs:
             echo "Current directory structure:"
             tree data/
             
-            # Run preprocessing with output capture
-            if PYTHONPATH=. python -m creditrisk.data.preproc 2>&1 | tee preprocess.log; then
+            # Run preprocessing with output capture and debug logging
+            echo "Python environment:"
+            echo "PYTHONPATH=$PWD"
+            echo "PROJ_ROOT=$PWD"
+            python -c "import sys; print(sys.path)" 2>&1 | tee debug.log
+            
+            if PYTHONPATH=$PWD PROJ_ROOT=$PWD LOGURU_LEVEL=DEBUG python -m creditrisk.data.preproc 2>&1 | tee preprocess.log; then
               echo "Preprocessing script completed, checking output..."
               
               if [ ! -f "data/raw/UCI_Credit_Card.csv" ]; then
                 echo "Error: Raw data file not downloaded"
                 echo "Current directory structure:"
                 tree
+                echo "Debug info:"
+                cat debug.log
                 echo "Process log:"
                 cat preprocess.log
                 exit 1
@@ -98,6 +106,8 @@ jobs:
                 echo "Error: No processed files generated"
                 echo "Current directory structure:"
                 tree
+                echo "Debug info:"
+                cat debug.log
                 echo "Process log:"
                 cat preprocess.log
                 exit 1
@@ -213,6 +223,7 @@ jobs:
           uv venv
           source .venv/bin/activate
           uv pip install -e .
+          uv pip install python-dotenv  # Ensure correct dotenv package
           
       - name: Setup environment
         run: |
@@ -245,8 +256,14 @@ jobs:
             echo "Current directory structure:"
             tree
             
+            # Show Python environment
+            echo "Python environment:"
+            echo "PYTHONPATH=$PWD"
+            echo "PROJ_ROOT=$PWD"
+            python -c "import sys; print(sys.path)" 2>&1 | tee debug.log
+            
             # Run training with output capture
-            if PYTHONPATH=. python -m creditrisk.models.train 2>&1 | tee train.log; then
+            if PYTHONPATH=$PWD PROJ_ROOT=$PWD LOGURU_LEVEL=DEBUG python -m creditrisk.models.train 2>&1 | tee train.log; then
               echo "Training completed successfully"
               echo "Final directory structure:"
               tree
