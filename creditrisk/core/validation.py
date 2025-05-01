@@ -109,10 +109,15 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     categorical_cols = df.select_dtypes(exclude=[np.number]).columns
 
     # Fill numeric columns with median
-    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
+    if not numeric_cols.empty:
+        df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
 
     # Fill categorical columns with mode
-    df[categorical_cols] = df[categorical_cols].fillna(df[categorical_cols].mode().iloc[0])
+    if not categorical_cols.empty:
+        try:
+            df[categorical_cols] = df[categorical_cols].fillna(df[categorical_cols].mode().iloc[0])
+        except IndexError:
+            logger.warning("No mode found for categorical columns, skipping fillna operation")
 
     return df
 

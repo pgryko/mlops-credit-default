@@ -103,20 +103,31 @@ def encode_categorical_features(df: pd.DataFrame) -> pd.DataFrame:
     df["MARRIAGE"] = df["MARRIAGE"].map(marriage_map)
 
     # Payment status encoding (-2: no consumption, -1: paid in full, 0: revolving credit, 1-8: months delay)
-    payment_cols = [f"PAY_{i}" for i in range(7)]
-    for col in payment_cols:
-        if col in df.columns:
-            df[col] = df[col].map(
-                {
-                    -2: "no_consumption",
-                    -1: "paid_full",
-                    0: "revolving",
-                    **{i: f"delay_{i}m" for i in range(1, 9)},
-                },
-            )
+    # Define all possible payment columns
+    all_payment_cols = [f"PAY_{i}" for i in range(7)]
 
-    # One-hot encode all categorical columns
-    return pd.get_dummies(df, columns=["EDUCATION", "MARRIAGE", *payment_cols])
+    # Filter to only include columns that exist in the dataframe
+    existing_payment_cols = [col for col in all_payment_cols if col in df.columns]
+
+    for col in existing_payment_cols:
+        df[col] = df[col].map(
+            {
+                -2: "no_consumption",
+                -1: "paid_full",
+                0: "revolving",
+                **{i: f"delay_{i}m" for i in range(1, 9)},
+            },
+        )
+
+    # One-hot encode all categorical columns that exist
+    columns_to_encode = []
+    if "EDUCATION" in df.columns:
+        columns_to_encode.append("EDUCATION")
+    if "MARRIAGE" in df.columns:
+        columns_to_encode.append("MARRIAGE")
+    columns_to_encode.extend(existing_payment_cols)
+
+    return pd.get_dummies(df, columns=columns_to_encode)
 
 
 def scale_amount_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -140,9 +151,17 @@ def scale_amount_features(df: pd.DataFrame) -> pd.DataFrame:
         >>> scaled_df = scale_amount_features(df)
 
     """
-    amount_cols = [col for col in df.columns if "AMOUNT" in col]
-    scaler = StandardScaler()
-    df[amount_cols] = scaler.fit_transform(df[amount_cols])
+    # Look for columns with either "AMOUNT" or "AMT" in their name
+    amount_cols = [col for col in df.columns if ("AMOUNT" in col or "AMT" in col)]
+
+    # Only proceed if we found some amount columns
+    if amount_cols:
+        logger.debug(f"Scaling amount columns: {amount_cols}")
+        scaler = StandardScaler()
+        df[amount_cols] = scaler.fit_transform(df[amount_cols])
+    else:
+        logger.warning("No amount columns found for scaling")
+
     return df
 
 
@@ -178,43 +197,87 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         >>> enhanced_df = engineer_features(df)
 
     """
-    # Payment history patterns
-    bill_cols = [f"BILL_AMOUNT{i}" for i in range(1, 7)]
+    # Payment history patterns - adapt to actual column names in the dataset
+    # Check if we have BILL_AMOUNT or BILL_AMT columns
+    if "BILL_AMOUNT1" in df.columns:
+        bill_cols = [f"BILL_AMOUNT{i}" for i in range(1, 7)]
+    else:
+        bill_cols = [f"BILL_AMT{i}" for i in range(1, 7)]
+
     pay_cols = [f"PAY_AMT{i}" for i in range(1, 7)]
+
+    # Log available columns for debugging
+    logger.debug(f"Available columns: {df.columns.tolist()}")
+    logger.debug(f"Using bill columns: {bill_cols}")
+    logger.debug(f"Using payment columns: {pay_cols}")
 
     # Calculate utilization ratios (bill amount / limit balance)
     for i, col in enumerate(bill_cols, 1):
-        df[f"UTILIZATION_RATIO_{i}"] = df[col] / df["LIMIT_BAL"]
+        if col in df.columns:
+            df[f"UTILIZATION_RATIO_{i}"] = df[col] / df["LIMIT_BAL"]
+        else:
+            logger.warning(f"Column {col} not found, skipping utilization ratio calculation")
 
-    # Calculate average utilization
-    df["AVG_UTILIZATION"] = df[[f"UTILIZATION_RATIO_{i}" for i in range(1, 7)]].mean(axis=1)
+    # Calculate average utilization for available columns
+    utilization_cols = [
+        f"UTILIZATION_RATIO_{i}" for i in range(1, 7) if f"UTILIZATION_RATIO_{i}" in df.columns
+    ]
+    if utilization_cols:
+        df["AVG_UTILIZATION"] = df[utilization_cols].mean(axis=1)
+    else:
+        logger.warning("No utilization ratio columns available, skipping average calculation")
 
-    # Payment amount trends
-    df["TOTAL_PAYMENT"] = df[pay_cols].sum(axis=1)
-    df["AVG_PAYMENT"] = df[pay_cols].mean(axis=1)
-    df["PAYMENT_TREND"] = (
-        df["PAY_AMT1"] * 6
-        + df["PAY_AMT2"] * 5
-        + df["PAY_AMT3"] * 4
-        + df["PAY_AMT4"] * 3
-        + df["PAY_AMT5"] * 2
-        + df["PAY_AMT6"]
-    ) / 21  # Weighted average giving more importance to recent payments
+    # Filter to only include columns that exist in the dataframe
+    existing_pay_cols = [col for col in pay_cols if col in df.columns]
+    existing_bill_cols = [col for col in bill_cols if col in df.columns]
 
-    # Payment consistency
-    df["PAYMENT_CONSISTENCY"] = (df[pay_cols] > 0).sum(axis=1) / len(pay_cols)
+    # Payment amount trends - only if columns exist
+    if existing_pay_cols:
+        df["TOTAL_PAYMENT"] = df[existing_pay_cols].sum(axis=1)
+        df["AVG_PAYMENT"] = df[existing_pay_cols].mean(axis=1)
 
-    # Bill amount trends
-    df["TOTAL_BILL"] = df[bill_cols].sum(axis=1)
-    df["AVG_BILL"] = df[bill_cols].mean(axis=1)
-    df["BILL_TREND"] = (
-        df["BILL_AMOUNT1"] * 6
-        + df["BILL_AMOUNT2"] * 5
-        + df["BILL_AMOUNT3"] * 4
-        + df["BILL_AMOUNT4"] * 3
-        + df["BILL_AMOUNT5"] * 2
-        + df["BILL_AMOUNT6"]
-    ) / 21
+        # Check if all required payment columns exist
+        if all(
+            col in df.columns
+            for col in ["PAY_AMT1", "PAY_AMT2", "PAY_AMT3", "PAY_AMT4", "PAY_AMT5", "PAY_AMT6"]
+        ):
+            df["PAYMENT_TREND"] = (
+                df["PAY_AMT1"] * 6
+                + df["PAY_AMT2"] * 5
+                + df["PAY_AMT3"] * 4
+                + df["PAY_AMT4"] * 3
+                + df["PAY_AMT5"] * 2
+                + df["PAY_AMT6"]
+            ) / 21  # Weighted average giving more importance to recent payments
+        else:
+            logger.warning("Not all PAY_AMT columns found, skipping payment trend calculation")
+
+        # Payment consistency
+        df["PAYMENT_CONSISTENCY"] = (df[existing_pay_cols] > 0).sum(axis=1) / len(
+            existing_pay_cols
+        )
+    else:
+        logger.warning("No payment columns found, skipping payment metrics calculations")
+
+    # Bill amount trends - only if columns exist
+    if existing_bill_cols:
+        df["TOTAL_BILL"] = df[existing_bill_cols].sum(axis=1)
+        df["AVG_BILL"] = df[existing_bill_cols].mean(axis=1)
+
+        # Check for column presence before calculating trend
+        if all(col in df.columns for col in bill_cols):
+            df["BILL_TREND"] = (
+                df[bill_cols[0]] * 6
+                + df[bill_cols[1]] * 5
+                + df[bill_cols[2]] * 4
+                + df[bill_cols[3]] * 3
+                + df[bill_cols[4]] * 2
+                + df[bill_cols[5]]
+            ) / 21
+        else:
+            logger.warning("Not all bill amount columns found, skipping bill trend calculation")
+    else:
+        logger.warning("No bill amount columns found, skipping bill metrics calculations")
 
     return df
 
@@ -278,7 +341,6 @@ def preprocess_df(file: str | Path) -> str | Path:
 if __name__ == "__main__":
     try:
         # Log environment information
-        import os
         import sys
 
         logger.debug(f"Current working directory: {os.getcwd()}")
@@ -288,20 +350,25 @@ if __name__ == "__main__":
         logger.debug(f"Environment DATA_DIR: {os.environ.get('DATA_DIR')}")
         logger.debug(f"Environment PROCESSED_DATA_DIR: {os.environ.get('PROCESSED_DATA_DIR')}")
 
-        # Get the dataset from default location
-        logger.info("Getting dataset")
-        get_raw_data()
-
-        # Check if the raw data file exists
+        # Skip Kaggle download and use existing file
+        logger.info("Using existing dataset")
+        # Try looking for either UCI_Credit_Card.csv or train.csv
         raw_file_path = RAW_DATA_DIR / "UCI_Credit_Card.csv"
         if not raw_file_path.exists():
-            logger.error(f"Raw data file not found at {raw_file_path}")
+            logger.info("UCI_Credit_Card.csv not found, checking for train.csv")
+            raw_file_path = RAW_DATA_DIR / "train.csv"
+
+        if not raw_file_path.exists():
+            logger.error(f"No suitable data file found in {RAW_DATA_DIR}")
             available_files = list(RAW_DATA_DIR.glob("*.csv"))
             if available_files:
                 logger.info(f"Available CSV files in {RAW_DATA_DIR}: {available_files}")
+                # Use the first available CSV file as fallback
+                raw_file_path = available_files[0]
+                logger.info(f"Using {raw_file_path.name} as fallback")
             else:
                 logger.error(f"No CSV files found in {RAW_DATA_DIR}")
-            sys.exit(1)
+                sys.exit(1)
         else:
             logger.info(f"Raw data file found at {raw_file_path}")
 
@@ -314,6 +381,13 @@ if __name__ == "__main__":
         processed_files = list(PROCESSED_DATA_DIR.glob("*"))
         logger.info(f"Files in processed directory: {processed_files}")
 
-    except Exception as e:
+    except (
+        OSError,
+        FileNotFoundError,
+        PermissionError,
+        ValueError,
+        KeyError,
+        pd.errors.EmptyDataError,
+    ) as e:
         logger.exception(f"Error during preprocessing: {e}")
         sys.exit(1)
