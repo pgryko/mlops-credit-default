@@ -7,7 +7,7 @@ on:
     paths:  
       - 'data/raw/train.csv'
       - 'data/processed/train.csv'
-      - 'ARISA_DSML/**/*.py'
+      - 'creditrisk/**/*.py'
       - 'models/best_params.pkl'
       - '.github/workflows/retrain_on_change.yml'
   workflow_dispatch:

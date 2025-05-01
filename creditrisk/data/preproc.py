@@ -11,10 +11,6 @@ Functions:
     engineer_features: Create new features from existing data
     preprocess_df: Run complete preprocessing pipeline
 
-Example:
-    >>> from ARISA_DSML.preproc import preprocess_df
-    >>> processed_path = preprocess_df("raw_credit_data.csv")
-    >>> print(f"Processed data saved to: {processed_path}")
 
 """
 
@@ -22,12 +18,13 @@ import os
 from pathlib import Path
 import zipfile
 
-from ARISA_DSML.config import DATASET, PROCESSED_DATA_DIR, RAW_DATA_DIR
-from ARISA_DSML.validation import validate_dataset
 from kaggle.api.kaggle_api_extended import KaggleApi
 from loguru import logger
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+
+from creditrisk.core.config import DATASET, PROCESSED_DATA_DIR, RAW_DATA_DIR
+from creditrisk.core.validation import validate_dataset
 
 
 def get_raw_data(dataset: str = DATASET) -> None:

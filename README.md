@@ -67,9 +67,33 @@ uv pip install -e .
 ```
 
 4. Set up Kaggle authentication:
-- Place your `kaggle.json` in:
-  - Windows: `C:\Users\USERNAME\.kaggle`
-  - Mac/Linux: `/home/username/.config/kaggle`
+
+   To create and set up your Kaggle API key:
+   - Log in to your Kaggle account at [kaggle.com](https://www.kaggle.com/)
+   - Go to "Account" by clicking on your profile picture in the top-right corner
+   - Scroll down to the "API" section
+   - Click "Create New API Token" - this will download a `kaggle.json` file
+   - Place your `kaggle.json` in:
+     - Windows: `C:\Users\USERNAME\.kaggle`
+     - Mac/Linux: `/home/username/.config/kaggle`
+   - Ensure the permissions are secure: `chmod 600 ~/.kaggle/kaggle.json` (Linux/Mac)
+
+5. Set up GitHub Personal Access Token (for workflows):
+
+   To create a GitHub PAT for workflow automation:
+   - Log in to your GitHub account
+   - Go to "Settings" → "Developer settings" → "Personal access tokens"
+   - Click "Generate new token" (choose "Fine-grained tokens" for better security)
+   - Give your token a descriptive name
+   - Set an appropriate expiration date
+   - Select required permissions (typically "repo" for full repository access)
+   - Click "Generate token"
+   - **IMPORTANT**: Copy and save your token securely - GitHub will only show it once!
+   - Store it as a repository secret:
+     - Go to your repository → "Settings" → "Secrets and variables" → "Actions"
+     - Click "New repository secret"
+     - Name it `WORKFLOW_PAT` (or your preferred name)
+     - Paste your token and click "Add secret"
 
 ## Usage
 
@@ -105,6 +129,53 @@ python -m creditrisk.predict --input new_customers.csv --output predictions.csv
 # Single prediction with explanation
 python -m creditrisk.predict --explain customer_data.json
 ```
+
+## CI/CD and Automated Workflows
+
+This project implements continuous integration and continuous delivery through GitHub Actions workflows that automate key MLOps processes.
+
+### Automated Model Retraining
+
+The system automatically retrains the model whenever relevant changes are detected, using the `retrain_on_change.yml` workflow:
+
+#### Workflow Triggers
+- Push to main branch affecting:
+  - Data files (`data/raw/train.csv`, `data/processed/train.csv`)
+  - Python code in the `creditrisk` package
+  - Model hyperparameter files (`models/best_params.pkl`)
+  - Workflow file itself
+- Manual trigger via GitHub Actions UI
+
+#### Required Secrets
+- `KAGGLE_KEY`: Your Kaggle API credentials in JSON format (see Setup section)
+- `WORKFLOW_PAT`: GitHub Personal Access Token with repo permissions (see Setup section)
+
+#### Workflow Steps
+1. **Preprocessing Job**:
+   - Sets up Python environment
+   - Configures Kaggle authentication
+   - Runs data preprocessing with automatic retries
+   - Uploads processed data as artifact
+   - Creates an issue if preprocessing fails
+
+2. **Training Job**:
+   - Downloads processed data artifact
+   - Sets up Python and MLflow
+   - Runs model training with automatic retries
+   - Temporarily disables branch protection using the PAT
+   - Commits and pushes model artifacts, MLflow data, and reports
+   - Restores branch protection rules
+   - Triggers prediction workflow
+   - Creates an issue if training fails
+
+### Setting Up Required Secrets
+
+For the workflow to function properly, you must add the following secrets to your GitHub repository:
+
+1. **KAGGLE_KEY**: The entire contents of your `kaggle.json` file
+2. **WORKFLOW_PAT**: A GitHub Personal Access Token with `repo` scope
+
+See the Setup section above for detailed instructions on creating these secrets.
 
 ## Model Performance
 

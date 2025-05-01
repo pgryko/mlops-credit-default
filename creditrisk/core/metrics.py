@@ -9,13 +9,6 @@ Functions:
     calculate_pr_auc: Calculate Precision-Recall AUC and curves
     optimize_threshold: Find optimal probability threshold based on business costs
 
-Example:
-    >>> from ARISA_DSML.metrics import calculate_business_metrics
-    >>> metrics = calculate_business_metrics(y_true, y_pred, cost_matrix={
-    ...     'fp_cost': 1.0,  # Cost of wrongly denying credit
-    ...     'fn_cost': 5.0   # Cost of unexpected default
-    ... })
-
 """
 
 import numpy as np
