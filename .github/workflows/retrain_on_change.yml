@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'data/raw/train.csv'
+      - 'data/raw/UCI_Credit_Card.csv'
       - 'creditrisk/**/*.py'
       - 'models/best_params.pkl'
       - '.github/workflows/retrain_on_change.yml'
@@ -36,42 +36,40 @@ jobs:
           uv venv
           source .venv/bin/activate
           uv pip install -e .
-          uv pip install kaggle
         
-      - name: Create kaggle directory
-        env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      - name: Setup directories
         run: |
-          source .venv/bin/activate
-          
-          # Create necessary directories
           mkdir -p data/raw
-          mkdir -p $HOME/.config/kaggle
-          
-          # Set up Kaggle credentials
-          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > $HOME/.config/kaggle/kaggle.json
-          chmod 600 $HOME/.config/kaggle/kaggle.json
-          
-          # Download dataset directly
-          kaggle datasets download -d uciml/default-of-credit-card-clients-dataset -p data/raw --unzip
+          mkdir -p data/processed
           
       - name: Run preprocessing
         id: preprocess
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         continue-on-error: true
         run: |
           source .venv/bin/activate
           
-          # Check if dataset was downloaded successfully
-          if [ ! -f "data/raw/UCI_Credit_Card.csv" ]; then
-            echo "Error: Dataset file not found. Kaggle download may have failed."
+          # Validate Kaggle credentials
+          if [ -z "$KAGGLE_USERNAME" ] || [ -z "$KAGGLE_KEY" ]; then
+            echo "Error: Kaggle credentials not provided"
             exit 1
           fi
           
-          # Attempt preprocessing with retries
+          # Create Kaggle config
+          mkdir -p $HOME/.config/kaggle
+          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > $HOME/.config/kaggle/kaggle.json
+          chmod 600 $HOME/.config/kaggle/kaggle.json
+          
+          # Run preprocessing with retries (includes download)
           for i in {1..3}; do
             echo "Preprocessing attempt $i..."
-            if make preprocess; then
+            if python -m creditrisk.data.preproc; then
+              if [ -z "$(ls -A data/processed)" ]; then
+                echo "Error: Preprocessing completed but no output files were generated"
+                exit 1
+              fi
               echo "Preprocessing completed successfully"
               exit 0
             fi
@@ -86,11 +84,19 @@ jobs:
         if: success()
         id: verify_preproc
         run: |
-          # Ensure the processed directory exists and contains files
-          if [ ! -d "data/processed" ] || [ -z "$(ls -A data/processed)" ]; then
-            echo "Error: Processed data directory is empty or does not exist"
+          if [ ! -d "data/processed" ]; then
+            echo "Error: Processed data directory does not exist"
             exit 1
           fi
+          
+          if [ -z "$(ls -A data/processed)" ]; then
+            echo "Error: Processed data directory is empty"
+            ls -la data/  # List contents of parent directory for debugging
+            exit 1
+          fi
+          
+          echo "Contents of processed data directory:"
+          ls -la data/processed/
           echo "Processed data verified successfully"
 
       - name: Upload processed data
