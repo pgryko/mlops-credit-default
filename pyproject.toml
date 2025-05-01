@@ -16,7 +16,7 @@ dependencies = [
     "kaleido==0.2.1",
     "loguru>=0.7.3",
     "matplotlib>=3.10.0",
-    "mlflow>=2.22.0",
+    "mlflow>=2.2.0",
     "nbformat>=5.10.4",
     "optuna>=4.2.1",
     "pandas>=2.2.3",
@@ -27,6 +27,9 @@ dependencies = [
     "shap>=0.46.0",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build_hook"
 
 [tool.black]
 line-length = 99
@@ -34,15 +37,43 @@ include = '\.pyi?$'
 exclude = '''
 /(
     \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
   | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
 )/
 '''
+
+[tool.pylama]
+max_line_length = 99
+format = "pylint"
+skip = ".venv/*,*.egg-info/*,build/*,dist/*"
+linters = "pycodestyle,pyflakes,mccabe"
+ignore = "E731,E266,E501,C901"
+
+[tool.ruff]
+line-length = 99
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
 
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = ["E731", "E266", "E501", "C901", "N803", "FBT001", "FBT002", "N806", "E231", "E225", "E227", "W391", "E252", "E226"]
+
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
+
+[tool.uv]
+exclude = [".venv"]
 
 [dependency-groups]
 dev = [
@@ -53,5 +84,6 @@ dev = [
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "ruff>=0.9.7",
+    "flake8>=7.1.2",
+    "pylama>=8.4.1",
 ]
-
