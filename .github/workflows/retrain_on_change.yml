@@ -37,14 +37,17 @@ jobs:
           uv venv
           source .venv/bin/activate
           uv pip install -e .
+          uv pip install kaggle
         
       - name: Create kaggle directory
         env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
           source .venv/bin/activate
+          mkdir -p data/raw
           mkdir -p $HOME/.config/kaggle
-          echo "$KAGGLE_KEY" > $HOME/.config/kaggle/kaggle.json
+          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > $HOME/.config/kaggle/kaggle.json
           chmod 600 $HOME/.config/kaggle/kaggle.json
           kaggle datasets list
           
