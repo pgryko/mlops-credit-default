@@ -29,7 +29,10 @@ dependencies = [
 
 [build-system]
 requires = ["hatchling"]
-build-backend = "hatchling.build_hook"
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["creditrisk"]
 
 [tool.black]
 line-length = 99
@@ -73,8 +76,6 @@ ignore = ["E731", "E266", "E501", "C901", "N803", "FBT001", "FBT002", "N806", "E
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
 
-[tool.uv]
-exclude = [".venv"]
 
 [dependency-groups]
 dev = [
