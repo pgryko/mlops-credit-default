@@ -124,4 +124,4 @@ def test_edge_cases() -> None:
     # All missing values in a column
     all_missing_df = pd.DataFrame({"BILL_AMOUNT1": [np.nan, np.nan, np.nan]})
     result = validate_dataset(all_missing_df)
-    assert not result.isnull().any().any()
+    assert not result.isna().any().any()

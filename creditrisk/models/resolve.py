@@ -1,12 +1,11 @@
 import sys
 
-from ARISA_DSML.config import (
-    MODEL_NAME,
-)
 from loguru import logger
 import mlflow
 from mlflow.client import MlflowClient
 from mlflow.exceptions import MlflowException
+
+from creditrisk.core.config import MODEL_NAME
 
 
 def get_model_by_alias(client, model_name: str = MODEL_NAME, alias: str = "champion"):

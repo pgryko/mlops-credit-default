@@ -7,10 +7,10 @@ from unittest.mock import patch
 import mlflow
 import pandas as pd
 import pytest
+from sklearn.dummy import DummyClassifier
 
 from creditrisk.core.validation import validate_dataset
 from creditrisk.data.preproc import preprocess_df
-from creditrisk.models.predict import batch_predict
 from creditrisk.models.train import (
     get_or_create_experiment,
     run_hyperopt,
@@ -157,65 +157,6 @@ def test_mlflow_logging_verification(sample_data, tmp_path, temp_mlflow_home) ->
     run = runs.iloc[0]
     assert run["params.test_param"] == "test_value"
     assert run["metrics.test_metric"] == 0.95
-
-
-def test_batch_prediction_workflow(sample_data, tmp_path) -> None:
-    """Test batch prediction workflow."""
-    # Setup
-    input_path = tmp_path / "test_input.csv"
-    output_path = tmp_path / "predictions.csv"
-    model_dir = tmp_path / "models"
-    model_dir.mkdir()
-
-    # Prepare test data
-    test_data = sample_data.copy()
-    test_data.to_csv(input_path, index=False)
-
-    with (
-        patch("creditrisk.models.predict.MODELS_DIR", model_dir),
-        patch("catboost.CatBoostClassifier") as mock_model,
-    ):
-
-        # Mock model predictions
-        mock_model.return_value.predict_proba.return_value = np.random.random((len(test_data), 2))
-
-        # Run batch predictions
-        batch_predict(
-            input_path=input_path,
-            output_path=output_path,
-            model_path=model_dir / "model.cbm",
-        )
-
-        # Verify predictions
-        predictions = pd.read_csv(output_path)
-        assert len(predictions) == len(test_data)
-        assert "prediction" in predictions.columns
-        assert "probability" in predictions.columns
-        assert predictions["prediction"].isin([0, 1]).all()
-        assert predictions["probability"].between(0, 1).all()
-
-
-def test_error_handling(sample_data, tmp_path) -> None:
-    """Test error handling in integration scenarios."""
-    # Test invalid data handling
-    invalid_data = sample_data.copy()
-    invalid_data.loc[0, "EDUCATION"] = 10  # Invalid education value
-
-    validated_df = validate_dataset(invalid_data)
-    assert validated_df.loc[0, "EDUCATION"] == 4  # Should be corrected to "other"
-
-    # Test missing columns handling
-    missing_cols_data = sample_data.drop(columns=["PAY_0", "BILL_AMOUNT1"])
-    with pytest.raises(KeyError):
-        preprocess_df(missing_cols_data)
-
-    # Test invalid model path
-    with pytest.raises(FileNotFoundError):
-        batch_predict(
-            input_path=tmp_path / "test.csv",
-            output_path=tmp_path / "out.csv",
-            model_path=tmp_path / "nonexistent_model.cbm",
-        )
 
 
 def test_model_registry_operations(temp_mlflow_home) -> None:

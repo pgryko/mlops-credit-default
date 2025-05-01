@@ -12,30 +12,11 @@ Functions:
     plot_error_scatter: Plot performance metrics with error bands
     get_or_create_experiment: Get or create MLflow experiment
 
-Example:
-    >>> from ARISA_DSML.train import run_hyperopt, train_cv, train
-    >>> best_params = run_hyperopt(X_train, y_train, categorical_indices)
-    >>> cv_results = train_cv(X_train, y_train, categorical_indices, best_params)
-    >>> model_path = train(X_train, y_train, categorical_indices, best_params)
 
 """
 
 from pathlib import Path
 
-from ARISA_DSML.config import (
-    FIGURES_DIR,
-    MODEL_NAME,
-    MODELS_DIR,
-    PROCESSED_DATA_DIR,
-    categorical,
-    target,
-)
-from ARISA_DSML.helpers import get_git_commit_hash
-from ARISA_DSML.metrics import (
-    calculate_business_metrics,
-    calculate_pr_auc,
-    optimize_threshold,
-)
 from catboost import CatBoostClassifier, Pool, cv
 import joblib
 from loguru import logger
@@ -48,6 +29,21 @@ import pandas as pd
 import plotly.graph_objects as go
 import shap
 from sklearn.model_selection import train_test_split
+
+from creditrisk.core.config import (
+    FIGURES_DIR,
+    MODEL_NAME,
+    MODELS_DIR,
+    PROCESSED_DATA_DIR,
+    categorical,
+    target,
+)
+from creditrisk.core.metrics import (
+    calculate_business_metrics,
+    calculate_pr_auc,
+    optimize_threshold,
+)
+from creditrisk.utils.helpers import get_git_commit_hash
 
 # Set tracking URI
 mlflow.set_tracking_uri("sqlite:///.mlflow/db/mlflow.db")

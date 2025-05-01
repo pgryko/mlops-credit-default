@@ -9,14 +9,6 @@ Functions:
     explain_prediction: Generate explanation for a single prediction
     predict: Make batch predictions with explanations
 
-Example:
-    >>> from ARISA_DSML.predict import predict
-    >>> preds_path, results = predict(
-    ...     model=loaded_model,
-    ...     df_pred=test_data,
-    ...     params=model_params
-    ... )
-    >>> print(f"Predictions saved to: {preds_path}")
 
 """
 
@@ -24,26 +16,28 @@ import json
 import os
 import sys
 
-from ARISA_DSML.config import (
+from catboost import CatBoostClassifier
+from loguru import logger
+import matplotlib.pyplot as plt
+import mlflow
+from mlflow import MlflowException
+from mlflow.client import MlflowClient
+import numpy as np
+import pandas as pd
+import shap
+
+from creditrisk.core.config import (
     FIGURES_DIR,
     MODELS_DIR,
     PROCESSED_DATA_DIR,
     target,
 )
-from ARISA_DSML.metrics import (
+from creditrisk.core.metrics import (
     calculate_business_metrics,
     calculate_pr_auc,
     optimize_threshold,
 )
-from ARISA_DSML.resolve import get_model_by_alias
-from catboost import CatBoostClassifier
-from loguru import logger
-import matplotlib.pyplot as plt
-import mlflow
-from mlflow.client import MlflowClient
-import numpy as np
-import pandas as pd
-import shap
+from creditrisk.models.resolve import get_model_by_alias
 
 
 def plot_shap(model: CatBoostClassifier, df_plot: pd.DataFrame) -> dict[str, float]:
