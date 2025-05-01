@@ -50,6 +50,7 @@ jobs:
         id: preprocess
         continue-on-error: true
         run: |
+          source .venv/bin/activate
           for i in {1..3}; do
             if make preprocess; then
               exit 0
@@ -123,6 +124,7 @@ jobs:
         id: train
         continue-on-error: true
         run: |
+          source .venv/bin/activate
           for i in {1..3}; do
             if make train; then
               exit 0
