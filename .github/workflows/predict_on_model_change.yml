@@ -28,12 +28,15 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install -U pip uv
+          uv venv
+          source .venv/bin/activate
           uv pip install -e .
           
       - name: Download and preprocess data
         env:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
+          source .venv/bin/activate
           mkdir -p $HOME/.config/kaggle
           echo "$KAGGLE_KEY" > $HOME/.config/kaggle/kaggle.json
           chmod 600 $HOME/.config/kaggle/kaggle.json
@@ -46,11 +49,14 @@ jobs:
           
       - name: Set MLflow tracking URI
         run: |
+          source .venv/bin/activate
           echo "MLFLOW_TRACKING_URI=sqlite:///.mlflow/db/mlflow.db" >> $GITHUB_ENV
           echo "MLFLOW_ARTIFACT_ROOT=./.mlflow/artifacts" >> $GITHUB_ENV
         
       - name: Resolve and predict
         run: |
+          source .venv/bin/activate
+          
           # For debugging
           echo "Checking MLflow connection..."
           mlflow --version
