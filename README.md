@@ -43,6 +43,7 @@ The system consists of three main pipelines:
 - Python 3.11.9 or higher
 - Kaggle account and API key
 - UV package manager
+- MLflow (for experiment tracking and model management)
 
 ### Local Development
 1. Clone the repository:
@@ -66,7 +67,24 @@ pip install uv
 uv pip install -e .
 ```
 
-4. Set up Kaggle authentication:
+4. Initialize MLflow:
+```bash
+# Create MLflow directories with correct permissions
+mkdir -p .mlflow/db
+mkdir -p .mlflow/artifacts
+chmod -R 775 .mlflow
+
+# Set MLflow tracking URI to use local directory
+export MLFLOW_TRACKING_URI="file://${PWD}/.mlflow"
+
+# Create a new MLflow experiment
+mlflow experiments create -n "credit-default-prediction"
+
+# Set it as the active experiment
+export MLFLOW_EXPERIMENT_NAME="credit-default-prediction"
+```
+
+5. Set up Kaggle authentication:
 
    To create and set up your Kaggle API key:
    - Log in to your Kaggle account at [kaggle.com](https://www.kaggle.com/)
@@ -78,7 +96,7 @@ uv pip install -e .
      - Mac/Linux: `/home/username/.config/kaggle`
    - Ensure the permissions are secure: `chmod 600 ~/.kaggle/kaggle.json` (Linux/Mac)
 
-5. Set up GitHub Personal Access Token (for workflows):
+6. Set up GitHub Personal Access Token (for workflows):
 
    To create a GitHub PAT for workflow automation:
    - Log in to your GitHub account
@@ -101,33 +119,33 @@ uv pip install -e .
 Process and validate new credit card data:
 ```bash
 # Download and preprocess data
-python -m creditrisk.preproc
+python -m creditrisk.data.preproc
 
 # Validate specific dataset
-python -m creditrisk.validation --input path/to/data.csv
+python -m creditrisk.models.validation --input path/to/data.csv
 ```
 
 ### Training Pipeline
 Train a new model with optimized hyperparameters:
 ```bash
 # Full training pipeline with hyperparameter optimization
-python -m creditrisk.train
+python -m creditrisk.models.train
 
 # Cross-validation only
-python -m creditrisk.train --cv-only
+python -m creditrisk.models.train --cv-only
 
 # Quick training with default parameters
-python -m creditrisk.train --quick
+python -m creditrisk.models.train --quick
 ```
 
 ### Prediction Pipeline
 Generate default predictions for new customers:
 ```bash
 # Batch predictions
-python -m creditrisk.predict --input new_customers.csv --output predictions.csv
+python -m creditrisk.models.predict --input new_customers.csv --output predictions.csv
 
 # Single prediction with explanation
-python -m creditrisk.predict --explain customer_data.json
+python -m creditrisk.models.predict --explain customer_data.json
 ```
 
 ## CI/CD and Automated Workflows
@@ -191,15 +209,65 @@ Current performance metrics:
 
 ## MLflow Tracking
 
-Access the MLflow UI to:
-- Compare experiments and model versions
-- View business metrics and performance benchmarks
-- Access model artifacts and SHAP explanations
-- Monitor model drift and data quality
+The project uses MLflow for experiment tracking and model versioning. To view the MLflow UI:
 
-Key experiments:
-- `credit_default_hyperparam_tuning`: Hyperparameter optimization runs
-- `credit_default_full_training`: Production model training
+1. Ensure MLflow environment is properly configured:
+```bash
+# Set MLflow tracking URI if not already set
+export MLFLOW_TRACKING_URI="file://${PWD}/.mlflow"
+
+# Verify MLflow directory structure
+ls -la .mlflow/db
+ls -la .mlflow/artifacts
+```
+
+2. Start the MLflow UI server:
+```bash
+# Start MLflow UI on port 5000
+mlflow ui --port 5000
+```
+
+3. Access the UI in your browser at: http://127.0.0.1:5000
+
+Note: If you encounter permission issues or missing meta.yaml files:
+1. Check directory permissions:
+```bash
+# Fix MLflow directory permissions
+chmod -R 775 .mlflow
+```
+
+2. Reinitialize the experiment if needed:
+```bash
+mlflow experiments create -n "credit-default-prediction"
+export MLFLOW_EXPERIMENT_NAME="credit-default-prediction"
+```
+
+Key MLflow features in this project:
+- Experiment tracking with metrics, parameters, and artifacts
+- Model versioning and deployment management
+- Performance visualization and comparison
+- Model registry for production deployment
+
+### Troubleshooting MLflow Issues
+
+If you encounter permission errors when logging artifacts:
+1. Ensure your user has write permissions to the MLflow directory:
+```bash
+sudo chown -R $USER:$USER .mlflow
+chmod -R u+w .mlflow
+```
+
+2. For CI/CD environments, verify the MLflow directory structure:
+```bash
+# Verify MLflow directories exist
+ls -la .mlflow/db
+ls -la .mlflow/artifacts
+
+# Recreate if needed
+mkdir -p .mlflow/db
+mkdir -p .mlflow/artifacts
+chmod -R 775 .mlflow
+```
 
 ## Model Card
 

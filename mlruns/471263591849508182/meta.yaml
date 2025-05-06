@@ -1,0 +1,6 @@
+artifact_location: file:///home/a/code/learning/mlops-credit-default/mlruns/471263591849508182
+creation_time: 1746558535748
+experiment_id: '471263591849508182'
+last_update_time: 1746558535748
+lifecycle_stage: active
+name: credit-default-prediction
