@@ -82,8 +82,8 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     """Handle missing values in the credit card dataset.
 
     This function implements the following strategy for handling missing values:
-    - Numeric columns: Fill with median values
-    - Categorical columns: Fill with mode (most frequent value)
+    - Numeric columns: Fill with median values, or 0 if all values are NaN
+    - Categorical columns: Fill with mode (most frequent value), or default values if all NaN
 
     Args:
         df: Input DataFrame that may contain missing values
@@ -99,6 +99,10 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
         >>> filled_df = handle_missing_values(df)
 
     """
+    # If DataFrame is empty, return it as is
+    if df.empty:
+        return df
+
     # Check for missing values
     missing = df.isnull().sum()
     if missing.any():
@@ -108,16 +112,42 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     categorical_cols = df.select_dtypes(exclude=[np.number]).columns
 
-    # Fill numeric columns with median
-    if not numeric_cols.empty:
-        df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
+    # Fill numeric columns with median or 0 if all values are NaN
+    for col in numeric_cols:
+        if df[col].isna().all():
+            # If all values are NaN, fill with 0
+            df[col] = df[col].fillna(0)
+        else:
+            # Otherwise use the median of non-NaN values
+            df[col] = df[col].fillna(df[col].median())
 
-    # Fill categorical columns with mode
+    # Fill categorical columns with mode or defaults
     if not categorical_cols.empty:
         try:
-            df[categorical_cols] = df[categorical_cols].fillna(df[categorical_cols].mode().iloc[0])
+            for col in categorical_cols:
+                if df[col].isna().all():
+                    # If the column is all NaN, use sensible defaults based on column name
+                    if "EDUCATION" in col or "MARRIAGE" in col:
+                        df[col] = df[col].fillna("other")
+                    elif "PAY_" in col:
+                        df[col] = df[col].fillna("revolving")
+                    else:
+                        # Generic default
+                        df[col] = df[col].fillna("unknown")
+                else:
+                    # Otherwise use the mode
+                    df[col] = df[col].fillna(df[col].mode().iloc[0])
         except IndexError:
-            logger.warning("No mode found for categorical columns, skipping fillna operation")
+            logger.warning("No mode found for categorical columns, using defaults")
+            # Fill with defaults for specific columns
+            for col in categorical_cols:
+                if "EDUCATION" in col or "MARRIAGE" in col:
+                    df[col] = df[col].fillna("other")
+                elif "PAY_" in col:
+                    df[col] = df[col].fillna("revolving")
+                else:
+                    # Generic default
+                    df[col] = df[col].fillna("unknown")
 
     return df
 

@@ -85,6 +85,10 @@ def encode_categorical_features(df: pd.DataFrame) -> pd.DataFrame:
         >>> encoded_df = encode_categorical_features(df)
 
     """
+    # If DataFrame is empty, return it as is
+    if df.empty:
+        return df
+
     # Education status encoding
     education_map = {
         1: "graduate",
@@ -92,7 +96,8 @@ def encode_categorical_features(df: pd.DataFrame) -> pd.DataFrame:
         3: "high_school",
         4: "other",
     }
-    df["EDUCATION"] = df["EDUCATION"].map(education_map)
+    if "EDUCATION" in df.columns:
+        df["EDUCATION"] = df["EDUCATION"].map(education_map)
 
     # Marriage status encoding
     marriage_map = {
@@ -100,7 +105,8 @@ def encode_categorical_features(df: pd.DataFrame) -> pd.DataFrame:
         2: "single",
         3: "other",
     }
-    df["MARRIAGE"] = df["MARRIAGE"].map(marriage_map)
+    if "MARRIAGE" in df.columns:
+        df["MARRIAGE"] = df["MARRIAGE"].map(marriage_map)
 
     # Payment status encoding (-2: no consumption, -1: paid in full, 0: revolving credit, 1-8: months delay)
     # Define all possible payment columns
@@ -110,6 +116,10 @@ def encode_categorical_features(df: pd.DataFrame) -> pd.DataFrame:
     existing_payment_cols = [col for col in all_payment_cols if col in df.columns]
 
     for col in existing_payment_cols:
+        # Make sure there are no null values
+        if df[col].isna().any():
+            df[col] = df[col].fillna(0)  # Fill NaN with revolving credit as default
+
         df[col] = df[col].map(
             {
                 -2: "no_consumption",
@@ -127,7 +137,10 @@ def encode_categorical_features(df: pd.DataFrame) -> pd.DataFrame:
         columns_to_encode.append("MARRIAGE")
     columns_to_encode.extend(existing_payment_cols)
 
-    return pd.get_dummies(df, columns=columns_to_encode)
+    # Only apply get_dummies if there are columns to encode
+    if columns_to_encode:
+        return pd.get_dummies(df, columns=columns_to_encode)
+    return df
 
 
 def scale_amount_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -151,15 +164,24 @@ def scale_amount_features(df: pd.DataFrame) -> pd.DataFrame:
         >>> scaled_df = scale_amount_features(df)
 
     """
+    # If DataFrame is empty, return it as is
+    if df.empty:
+        return df
+
     # Look for columns with either "AMOUNT" or "AMT" in their name
     amount_cols = [col for col in df.columns if ("AMOUNT" in col or "AMT" in col)]
 
-    # Only proceed if we found some amount columns
-    if amount_cols:
+    # Only proceed if we found some amount columns and have more than one row
+    # (StandardScaler needs at least 2 samples to calculate variance)
+    if amount_cols and len(df) > 1:
         logger.debug(f"Scaling amount columns: {amount_cols}")
         scaler = StandardScaler()
         df[amount_cols] = scaler.fit_transform(df[amount_cols])
-    else:
+    elif amount_cols and len(df) == 1:
+        # For single row, just center the data
+        logger.debug(f"Only one row found, centering amount columns: {amount_cols}")
+        df[amount_cols] = 0.0  # Center data to mean 0
+    elif not amount_cols:
         logger.warning("No amount columns found for scaling")
 
     return df
@@ -197,6 +219,14 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         >>> enhanced_df = engineer_features(df)
 
     """
+    # If DataFrame is empty or missing required columns, return it as is
+    if df.empty:
+        return df
+
+    if "LIMIT_BAL" not in df.columns:
+        logger.warning("LIMIT_BAL column not found, skipping feature engineering")
+        return df
+
     # Payment history patterns - adapt to actual column names in the dataset
     # Check if we have BILL_AMOUNT or BILL_AMT columns
     if "BILL_AMOUNT1" in df.columns:

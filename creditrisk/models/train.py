@@ -322,18 +322,26 @@ def train(
         plt.close()
 
         # Log the model
+        # Log the model and register it
         model_info = mlflow.catboost.log_model(
             cb_model=model,
             artifact_path="model",
             input_example=X_train,
             registered_model_name=MODEL_NAME,
         )
+
+        # Get MLflow client and use modern approach without stages
         client = MlflowClient(mlflow.get_tracking_uri())
-        model_info = client.get_latest_versions(MODEL_NAME)[0]
-        client.set_registered_model_alias(MODEL_NAME, "challenger", model_info.version)
+
+        # Set an alias for this model version (modern approach instead of stages)
+        # First get the model version from the returned model_info
+        model_version = model_info.version
+
+        # Set the alias and tag
+        client.set_registered_model_alias(MODEL_NAME, "challenger", model_version)
         client.set_model_version_tag(
-            name=model_info.name,
-            version=model_info.version,
+            name=MODEL_NAME,
+            version=model_version,
             key="git_sha",
             value=get_git_commit_hash(),
         )
@@ -373,7 +381,7 @@ def plot_error_scatter(  # noqa: PLR0913
     xtitle: str = "",
     ytitle: str = "",
     yaxis_range: list[float] | None = None,
-) -> None:
+) -> go.Figure:
     """Plot performance metrics with error bands using plotly.
 
     Creates an interactive scatter plot with shaded error regions, useful for
@@ -391,7 +399,7 @@ def plot_error_scatter(  # noqa: PLR0913
         yaxis_range: Y-axis range limits [min, max] (optional)
 
     Returns:
-        None. Displays plot and saves to file.
+        Plotly Figure object. Also displays plot and saves to file.
 
     Example:
         >>> plot_error_scatter(

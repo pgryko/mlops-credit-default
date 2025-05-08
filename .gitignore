@@ -57,3 +57,4 @@ ENV/
 !models/
 !data/processed/
 !reports/figures/
+**/.claude/settings.local.json
