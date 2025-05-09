@@ -1,0 +1,6 @@
+artifact_location: file:///home/a/code/learning/mlops-credit-default/mlruns/5
+creation_time: 1714676340000
+experiment_id: '5'
+last_update_time: 1714676340000
+lifecycle_stage: active
+name: Credit Default Production Experiment

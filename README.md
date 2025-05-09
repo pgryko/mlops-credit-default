@@ -82,6 +82,11 @@ mlflow experiments create -n "credit-default-prediction"
 
 # Set it as the active experiment
 export MLFLOW_EXPERIMENT_NAME="credit-default-prediction"
+
+# Start the MLflow UI server (run in background)
+mlflow ui --backend-store-uri sqlite:///.mlflow/db/mlflow.db --default-artifact-root .mlflow/artifacts
+
+# Access the MLflow UI at http://localhost:5000
 ```
 
 5. Set up Kaggle authentication:
