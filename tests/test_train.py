@@ -97,7 +97,7 @@ def test_train_cv() -> None:
             "test-F1-std": np.random.uniform(0.01, 0.05, 10),
             "test-Logloss-mean": np.random.uniform(0.3, 0.5, 10),
             "test-Logloss-std": np.random.uniform(0.01, 0.05, 10),
-        }
+        },
     )
 
     # Test the function structure with minimal arguments
@@ -141,7 +141,7 @@ def test_train() -> None:
             "iterations": [1, 2],
             "test-F1-mean": [0.8, 0.9],
             "test-F1-std": [0.1, 0.05],
-        }
+        },
     )
 
     # Create a simplified mock implementation
@@ -237,7 +237,7 @@ def test_edge_cases() -> None:
             "iterations": range(1, 11),
             "test-F1-mean": np.random.uniform(0.7, 0.9, 10),
             "test-F1-std": np.random.uniform(0.01, 0.05, 10),
-        }
+        },
     )
 
     with (
