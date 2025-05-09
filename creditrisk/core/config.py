@@ -2,7 +2,15 @@
 
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from python_dotenv import load_dotenv
+except ImportError:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        # If neither module is available, create a dummy function
+        def load_dotenv():
+            pass
 from loguru import logger
 
 # Load environment variables from .env file if it exists

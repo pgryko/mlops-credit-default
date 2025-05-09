@@ -321,6 +321,35 @@ def train(
         mlflow.log_figure(plt.gcf(), "shap_summary.png")
         plt.close()
 
+        # Generate and log SHAP dependence plots for top features
+        feature_importance = np.abs(shap_values).mean(0)
+        feature_importance_df = pd.DataFrame(
+            list(zip(X_train.columns, feature_importance, strict=False)),
+            columns=["feature", "importance"],
+        )
+        feature_importance_df = feature_importance_df.sort_values("importance", ascending=False)
+
+        # Generate dependence plots for top 5 features
+        for idx, (feature, _) in enumerate(feature_importance_df.iloc[:5].itertuples(index=False)):
+            shap.dependence_plot(
+                feature,
+                shap_values,
+                X_train,
+                show=False,
+                interaction_index=None,
+            )
+            mlflow.log_figure(plt.gcf(), f"shap_dependence_{feature}.png")
+            plt.close()
+
+        # Generate feature importance plot
+        plt.figure(figsize=(10, 6))
+        plt.barh(range(len(feature_importance_df[:10])), feature_importance_df["importance"][:10])
+        plt.yticks(range(len(feature_importance_df[:10])), feature_importance_df["feature"][:10])
+        plt.xlabel("Mean |SHAP value|")
+        plt.title("Feature Importance (top 10 features)")
+        mlflow.log_figure(plt.gcf(), "feature_importance_top10.png")
+        plt.close()
+
         # Log the model
         # Log the model and register it
         model_info = mlflow.catboost.log_model(
