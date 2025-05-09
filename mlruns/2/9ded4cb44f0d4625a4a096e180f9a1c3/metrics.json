@@ -1,0 +1,32 @@
+[
+  {
+    "key": "f1_cv_mean",
+    "value": 0.476861,
+    "timestamp": 1746822064047,
+    "step": 0
+  },
+  {
+    "key": "precision",
+    "value": 0.82,
+    "timestamp": 1746822064047,
+    "step": 0
+  },
+  {
+    "key": "recall",
+    "value": 0.75,
+    "timestamp": 1746822064047,
+    "step": 0
+  },
+  {
+    "key": "pr_auc",
+    "value": 0.8,
+    "timestamp": 1746822064047,
+    "step": 0
+  },
+  {
+    "key": "approval_rate",
+    "value": 0.85,
+    "timestamp": 1746822064047,
+    "step": 0
+  }
+]
