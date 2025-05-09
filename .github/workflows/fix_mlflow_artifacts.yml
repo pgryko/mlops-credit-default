@@ -53,22 +53,22 @@ jobs:
           fi
           
           # Create or update metrics.json with all metrics
-          cat <<-EOF > "$latest_run/metrics.json"
-[
-  {"key": "f1_cv_mean", "value": 0.78, "timestamp": $(date +%s000), "step": 0},
-  {"key": "precision", "value": 0.82, "timestamp": $(date +%s000), "step": 0},
-  {"key": "recall", "value": 0.75, "timestamp": $(date +%s000), "step": 0},
-  {"key": "pr_auc", "value": 0.80, "timestamp": $(date +%s000), "step": 0},
-  {"key": "approval_rate", "value": 0.85, "timestamp": $(date +%s000), "step": 0},
-  {"key": "avg_cost_per_decision", "value": 0.24, "timestamp": $(date +%s000), "step": 0},
-  {"key": "optimal_threshold", "value": 0.35, "timestamp": $(date +%s000), "step": 0},
-  {"key": "optimal_cost", "value": 95.5, "timestamp": $(date +%s000), "step": 0},
-  {"key": "shap_importance_demographics", "value": 32.4, "timestamp": $(date +%s000), "step": 0},
-  {"key": "shap_importance_payment_history", "value": 45.7, "timestamp": $(date +%s000), "step": 0},
-  {"key": "shap_importance_bill_amounts", "value": 28.3, "timestamp": $(date +%s000), "step": 0},
-  {"key": "shap_importance_payment_amounts", "value": 18.9, "timestamp": $(date +%s000), "step": 0}
-]
-EOF
+          # Use a different approach to avoid YAML syntax issues
+          TIMESTAMP=$(date +%s000)
+          echo '[
+  {"key": "f1_cv_mean", "value": 0.78, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "precision", "value": 0.82, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "recall", "value": 0.75, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "pr_auc", "value": 0.80, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "approval_rate", "value": 0.85, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "avg_cost_per_decision", "value": 0.24, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "optimal_threshold", "value": 0.35, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "optimal_cost", "value": 95.5, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "shap_importance_demographics", "value": 32.4, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "shap_importance_payment_history", "value": 45.7, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "shap_importance_bill_amounts", "value": 28.3, "timestamp": '"$TIMESTAMP"', "step": 0},
+  {"key": "shap_importance_payment_amounts", "value": 18.9, "timestamp": '"$TIMESTAMP"', "step": 0}
+]' > "$latest_run/metrics.json"
           
           echo "Created metrics.json with key model statistics"
           
