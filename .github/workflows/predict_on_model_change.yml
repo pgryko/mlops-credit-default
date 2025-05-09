@@ -56,64 +56,68 @@ jobs:
       - name: Create MLflow meta files
         run: |
           source .venv/bin/activate
-          
+
+          # Prepare variables
+          CURR_DIR=$(pwd)
+          TIMESTAMP=$(date +%s%3N)
+
           # Create experiment meta.yaml files
           mkdir -p mlruns/2
           if [ ! -f "mlruns/2/meta.yaml" ]; then
             echo "Creating experiment meta.yaml for experiment ID 2"
-            cat > mlruns/2/meta.yaml <<EOF
-artifact_location: file:///$(pwd)/mlruns/2
-creation_time: $(date +%s%3N)
-experiment_id: '2'
-last_update_time: $(date +%s%3N)
-lifecycle_stage: active
-name: Credit Default Experiment 2
-EOF
+            {
+              echo "artifact_location: file:///$CURR_DIR/mlruns/2"
+              echo "creation_time: $TIMESTAMP"
+              echo "experiment_id: '2'"
+              echo "last_update_time: $TIMESTAMP"
+              echo "lifecycle_stage: active"
+              echo "name: Credit Default Experiment 2"
+            } > mlruns/2/meta.yaml
           fi
 
           mkdir -p mlruns/4
           if [ ! -f "mlruns/4/meta.yaml" ]; then
             echo "Creating experiment meta.yaml for experiment ID 4"
-            cat > mlruns/4/meta.yaml <<EOF
-artifact_location: file:///$(pwd)/mlruns/4
-creation_time: $(date +%s%3N)
-experiment_id: '4'
-last_update_time: $(date +%s%3N)
-lifecycle_stage: active
-name: Credit Default Experiment 4
-EOF
+            {
+              echo "artifact_location: file:///$CURR_DIR/mlruns/4"
+              echo "creation_time: $TIMESTAMP"
+              echo "experiment_id: '4'"
+              echo "last_update_time: $TIMESTAMP"
+              echo "lifecycle_stage: active"
+              echo "name: Credit Default Experiment 4"
+            } > mlruns/4/meta.yaml
           fi
-          
+
           # Create meta.yaml files for all run directories
           for run_dir in mlruns/*/*/; do
             if [[ "$run_dir" == *"meta.yaml"* ]] || [[ "$run_dir" != *"/"*"/"*"/"* ]]; then
               continue
             fi
-            
+
             run_id=$(basename "$run_dir")
             exp_id=$(basename "$(dirname "$run_dir")")
-            
+
             if [ ! -f "${run_dir}meta.yaml" ]; then
               echo "Creating run meta.yaml in ${run_dir}"
-              cat > "${run_dir}meta.yaml" <<EOF
-artifact_uri: file:///$(pwd)/${run_dir}artifacts
-end_time: $(date +%s%3N)
-entry_point_name: ''
-experiment_id: '$exp_id'
-lifecycle_stage: active
-run_id: $run_id
-run_name: Credit Default Prediction Run
-run_uuid: $run_id
-source_name: ''
-source_type: 4
-source_version: ''
-start_time: $(date +%s%3N)
-status: 3
-user_id: ''
-EOF
+              {
+                echo "artifact_uri: file:///$CURR_DIR/${run_dir}artifacts"
+                echo "end_time: $TIMESTAMP"
+                echo "entry_point_name: ''"
+                echo "experiment_id: '$exp_id'"
+                echo "lifecycle_stage: active"
+                echo "run_id: $run_id"
+                echo "run_name: Credit Default Prediction Run"
+                echo "run_uuid: $run_id"
+                echo "source_name: ''"
+                echo "source_type: 4"
+                echo "source_version: ''"
+                echo "start_time: $TIMESTAMP"
+                echo "status: 3"
+                echo "user_id: ''"
+              } > "${run_dir}meta.yaml"
             fi
           done
-          
+
           echo "MLflow meta files created"
           find mlruns -name "meta.yaml"
           
