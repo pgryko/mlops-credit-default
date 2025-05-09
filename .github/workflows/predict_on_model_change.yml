@@ -32,7 +32,7 @@ jobs:
           source .venv/bin/activate
           uv pip install -e .
           
-      - name: Download and preprocess data
+      - name: Download, preprocess data and create test set
         env:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
@@ -41,6 +41,25 @@ jobs:
           echo "$KAGGLE_KEY" > $HOME/.config/kaggle/kaggle.json
           chmod 600 $HOME/.config/kaggle/kaggle.json
           make preprocess
+
+          # Create test dataset for prediction (if not exists)
+          if [ ! -f "data/processed/test.csv" ]; then
+            echo "Creating test dataset from training data..."
+            chmod +x .github/scripts/create_test_data.py
+            python .github/scripts/create_test_data.py
+          else
+            echo "Test dataset already exists at data/processed/test.csv"
+          fi
+
+          # Verify test dataset
+          if [ -f "data/processed/test.csv" ]; then
+            echo "Test dataset info:"
+            wc -l data/processed/test.csv
+            head -n 1 data/processed/test.csv
+          else
+            echo "Error: Test dataset could not be created"
+            exit 1
+          fi
         
       - name: Setup MLflow
         run: |
@@ -152,12 +171,19 @@ jobs:
       - name: Resolve and predict
         run: |
           source .venv/bin/activate
-          
+
           # For debugging
           echo "Checking MLflow connection..."
           mlflow --version
           mlflow experiments search
-          
+
+          # Verify test dataset exists before resolving
+          if [ ! -f "data/processed/test.csv" ]; then
+            echo "Error: Test dataset not found. Cannot proceed with predictions."
+            exit 1
+          fi
+
+          echo "Running model resolution..."
           make resolve || {
             echo "Resolve failed but continuing..."
             exit_code=$?
@@ -165,11 +191,21 @@ jobs:
               echo "No existing model found, skipping resolve"
             fi
           }
-          
+
+          echo "Running predictions..."
           make predict || {
             echo "No models available for prediction. This is expected for first run."
             exit 0  # Changed from 1 to 0 to not fail the workflow
           }
+
+          # Check if predictions were created
+          if [ -f "models/preds.csv" ]; then
+            echo "Prediction results:"
+            head -n 5 models/preds.csv
+            echo "Total predictions: $(wc -l < models/preds.csv)"
+          else
+            echo "No prediction output file was created."
+          fi
           
       - name: Upload predictions
         if: success() && hashFiles('models/preds.csv') != ''  # Only upload if predictions exist
