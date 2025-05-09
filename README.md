@@ -208,9 +208,14 @@ The model is optimized for business impact using:
 - Business metrics (approval rate, default rate, avg cost per decision)
 
 Current performance metrics:
-- PR-AUC: 0.XX
-- F1 Score: 0.XX
-- Avg Cost per Decision: $XX.XX
+- F1 Score (CV Mean): 0.477
+- Feature Group Importance (SHAP values):
+  - Bill Amounts: 0.031
+  - Payment History: 0.030
+  - Payment Amounts: 0.028
+  - Demographics: 0.019
+
+These SHAP values indicate that financial behavior (bill and payment patterns) has the strongest influence on default prediction, while demographic factors have relatively less impact.
 
 ## MLflow Tracking
 
