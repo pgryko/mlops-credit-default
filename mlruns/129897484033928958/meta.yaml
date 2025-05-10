@@ -1,0 +1,6 @@
+artifact_location: file:///home/a/code/learning/mlops-credit-default/mlruns/129897484033928958
+creation_time: 1746888086701
+experiment_id: '129897484033928958'
+last_update_time: 1746888086701
+lifecycle_stage: active
+name: credit_default_hyperparam_tuning

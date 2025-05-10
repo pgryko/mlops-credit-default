@@ -1,0 +1,95 @@
+{
+  "predictions": [
+    0,
+    1
+  ],
+  "probabilities": [
+    0.020705958489454564,
+    0.18022530864808267
+  ],
+  "explanations": [
+    {
+      "prediction": 0,
+      "probability": 0.020705958489454564,
+      "top_features": [
+        {
+          "feature": "PAY_AMT1",
+          "value": 1.0,
+          "contribution": -0.7213124822769772
+        },
+        {
+          "feature": "SEX",
+          "value": 1.0,
+          "contribution": 0.28695794730522894
+        },
+        {
+          "feature": "PAY_0_paid_full",
+          "value": 1.0,
+          "contribution": -0.19472554578389104
+        },
+        {
+          "feature": "TOTAL_PAYMENT",
+          "value": 1.0,
+          "contribution": -0.13254895926177546
+        },
+        {
+          "feature": "EDUCATION_graduate",
+          "value": 1.0,
+          "contribution": -0.12285712964772764
+        }
+      ]
+    },
+    {
+      "prediction": 0,
+      "probability": 0.18022530864808267,
+      "top_features": [
+        {
+          "feature": "UTILIZATION_RATIO_1",
+          "value": -3.3333333333333335e-05,
+          "contribution": 0.3593740206400801
+        },
+        {
+          "feature": "AVG_UTILIZATION",
+          "value": -3.3333333333333335e-05,
+          "contribution": -0.3547398867655258
+        },
+        {
+          "feature": "SEX",
+          "value": 2.0,
+          "contribution": 0.32415385193621565
+        },
+        {
+          "feature": "EDUCATION_graduate",
+          "value": 0.0,
+          "contribution": -0.15364116459879726
+        },
+        {
+          "feature": "MARRIAGE_married",
+          "value": 0.0,
+          "contribution": 0.1444193766226932
+        }
+      ]
+    }
+  ],
+  "feature_importance": {
+    "demographics": 0.11492576447063425,
+    "payment_history": 0.22805947617734218,
+    "bill_amounts": 0.24737075216593682,
+    "payment_amounts": 0.4096440071860867
+  },
+  "threshold": 0.1,
+  "metrics": {
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "approval_rate": 0.5,
+    "default_rate": 0.5,
+    "total_cost": 0.0,
+    "avg_cost_per_decision": 0.0,
+    "true_negatives": 1,
+    "false_positives": 0,
+    "false_negatives": 0,
+    "true_positives": 1,
+    "pr_auc": 1.0
+  }
+}

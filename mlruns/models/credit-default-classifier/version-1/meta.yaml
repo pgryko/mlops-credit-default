@@ -1,0 +1,14 @@
+aliases: []
+creation_timestamp: 1746888161521
+current_stage: None
+description: null
+last_updated_timestamp: 1746888161521
+name: credit-default-classifier
+run_id: 5abdb5b959914cd3b003e97b879826f1
+run_link: null
+source: file:///home/a/code/learning/mlops-credit-default/mlruns/962275649614335590/5abdb5b959914cd3b003e97b879826f1/artifacts/model
+status: READY
+status_message: null
+storage_location: file:///home/a/code/learning/mlops-credit-default/mlruns/962275649614335590/5abdb5b959914cd3b003e97b879826f1/artifacts/model
+user_id: null
+version: 1
