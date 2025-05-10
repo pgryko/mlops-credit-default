@@ -120,11 +120,20 @@ mlflow ui --backend-store-uri sqlite:///.mlflow/db/mlflow.db --default-artifact-
 
 ## Usage
 
+### Running the Complete Pipeline
+Run the entire pipeline (preprocessing, training, and prediction) with a single command:
+```bash
+make preprocess && make train && make predict
+```
+
+### Individual Pipeline Components
+You can also run each component separately if needed:
+
 ### Data Pipeline
 Process and validate new credit card data:
 ```bash
 # Download and preprocess data
-python -m creditrisk.data.preproc
+make preprocess
 
 # Validate specific dataset
 python -m creditrisk.models.validation --input path/to/data.csv
@@ -134,7 +143,7 @@ python -m creditrisk.models.validation --input path/to/data.csv
 Train a new model with optimized hyperparameters:
 ```bash
 # Full training pipeline with hyperparameter optimization
-python -m creditrisk.models.train
+make train
 
 # Cross-validation only
 python -m creditrisk.models.train --cv-only
@@ -146,8 +155,8 @@ python -m creditrisk.models.train --quick
 ### Prediction Pipeline
 Generate default predictions for new customers:
 ```bash
-# Batch predictions
-python -m creditrisk.models.predict --input new_customers.csv --output predictions.csv
+# Run predictions using the latest model
+make predict
 
 # Single prediction with explanation
 python -m creditrisk.models.predict --explain customer_data.json

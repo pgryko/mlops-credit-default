@@ -151,9 +151,7 @@ def run_hyperopt(
                 # Log all metrics
                 mlflow.log_metrics(
                     {
-                        "f1": business_metrics["f1_score"],
-                        "precision": business_metrics["precision"],
-                        "recall": business_metrics["recall"],
+                        "f1": business_metrics["f1"],
                         "pr_auc": pr_auc,
                         "approval_rate": business_metrics["approval_rate"],
                         "avg_cost_per_decision": business_metrics["avg_cost_per_decision"],
@@ -380,7 +378,7 @@ def train(
         model_version = model_info.registered_model_version
 
         # Set the alias and tag
-        client.set_registered_model_alias(MODEL_NAME, "challenger", model_version)
+        client.set_registered_model_alias(MODEL_NAME, "champion", model_version)
         client.set_model_version_tag(
             name=MODEL_NAME,
             version=model_version,

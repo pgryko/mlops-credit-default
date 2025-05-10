@@ -380,35 +380,53 @@ if __name__ == "__main__":
         logger.debug(f"Environment DATA_DIR: {os.environ.get('DATA_DIR')}")
         logger.debug(f"Environment PROCESSED_DATA_DIR: {os.environ.get('PROCESSED_DATA_DIR')}")
 
-        # Skip Kaggle download and use existing file
-        logger.info("Using existing dataset")
-        # Try looking for either UCI_Credit_Card.csv or train.csv
-        raw_file_path = RAW_DATA_DIR / "UCI_Credit_Card.csv"
-        if not raw_file_path.exists():
-            logger.info("UCI_Credit_Card.csv not found, checking for train.csv")
-            raw_file_path = RAW_DATA_DIR / "train.csv"
+        # Define raw data file names
+        raw_train_filename = "train.csv"
+        raw_test_filename = "test.csv"  # Assuming your raw test file is named test.csv
 
-        if not raw_file_path.exists():
-            logger.error(f"No suitable data file found in {RAW_DATA_DIR}")
+        raw_train_file_path = RAW_DATA_DIR / raw_train_filename
+        raw_test_file_path = RAW_DATA_DIR / raw_test_filename
+
+        files_to_process = []
+        if raw_train_file_path.exists():
+            logger.info(f"Raw training data file found at {raw_train_file_path}")
+            files_to_process.append(raw_train_file_path)
+        else:
+            logger.warning(f"Raw training data file NOT found at {raw_train_file_path}")
+
+        if raw_test_file_path.exists():
+            logger.info(f"Raw test data file found at {raw_test_file_path}")
+            files_to_process.append(raw_test_file_path)
+        else:
+            logger.warning(f"Raw test data file NOT found at {raw_test_file_path}")
+            # Fallback for old UCI_Credit_Card.csv if train.csv is also missing and test.csv is missing
+            if not raw_train_file_path.exists():
+                fallback_uci_path = RAW_DATA_DIR / "UCI_Credit_Card.csv"
+                if fallback_uci_path.exists():
+                    logger.info(
+                        f"Found {fallback_uci_path.name}, will process it as the primary dataset."
+                    )
+                    files_to_process.append(fallback_uci_path)
+
+        if not files_to_process:
+            logger.error(
+                f"No suitable raw data files found in {RAW_DATA_DIR} (expected {raw_train_filename}, {raw_test_filename}, or UCI_Credit_Card.csv as fallback)."
+            )
             available_files = list(RAW_DATA_DIR.glob("*.csv"))
             if available_files:
                 logger.info(f"Available CSV files in {RAW_DATA_DIR}: {available_files}")
-                # Use the first available CSV file as fallback
-                raw_file_path = available_files[0]
-                logger.info(f"Using {raw_file_path.name} as fallback")
-            else:
-                logger.error(f"No CSV files found in {RAW_DATA_DIR}")
-                sys.exit(1)
-        else:
-            logger.info(f"Raw data file found at {raw_file_path}")
+            sys.exit(1)
 
-        # Preprocess the dataset
-        logger.info("Preprocessing data")
-        output_path = preprocess_df(raw_file_path)
-        logger.info(f"Preprocessing completed. Output saved to {output_path}")
+        # Preprocess the dataset(s)
+        for raw_file_path_item in files_to_process:
+            logger.info(f"Preprocessing {raw_file_path_item.name}...")
+            output_path = preprocess_df(raw_file_path_item)
+            logger.info(
+                f"Preprocessing for {raw_file_path_item.name} completed. Output saved to {output_path}"
+            )
 
         # List processed files for verification
-        processed_files = list(PROCESSED_DATA_DIR.glob("*"))
+        processed_files = list(PROCESSED_DATA_DIR.glob("*.csv"))
         logger.info(f"Files in processed directory: {processed_files}")
 
     except (

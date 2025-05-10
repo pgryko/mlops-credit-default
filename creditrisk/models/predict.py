@@ -14,6 +14,7 @@ Functions:
 
 import json
 import os
+from pathlib import Path
 import sys
 
 from catboost import CatBoostClassifier
@@ -30,6 +31,7 @@ from creditrisk.core.config import (
     FIGURES_DIR,
     MODELS_DIR,
     PROCESSED_DATA_DIR,
+    categorical,
     target,
 )
 from creditrisk.core.metrics import (
@@ -198,10 +200,9 @@ def predict(
     params : dict
         Model parameters including feature_columns
     batch_size : int, optional
-        Number of samples to process at once (default: 1000)
+        Number of samples to process at once, by default 1000
     optimize_thresh : bool, optional
-        Whether to optimize probability threshold using business metrics
-        (default: True)
+        Whether to optimize the probability threshold, by default True
 
     Returns
     -------
@@ -228,7 +229,23 @@ def predict(
 
     """
     feature_columns = params.pop("feature_columns")
-    X_pred = df_pred[feature_columns]
+    X_pred = df_pred[feature_columns].copy()
+
+    # Get categorical features from config or use a heuristic approach
+    cat_features = [col for col in X_pred.columns if col in categorical]
+
+    # Log categorical features before conversion
+    logger.debug(f"Categorical features: {cat_features}")
+
+    # Convert categorical features and any float columns in categorical to string to avoid CatBoost errors
+    for col in X_pred.columns:
+        # If column is in the categorical list or is a float column, convert to string
+        if col in categorical:
+            logger.debug(f"Converting column {col} of type {X_pred[col].dtype} to string")
+            X_pred[col] = X_pred[col].astype(str)
+
+    # Log column types after conversion
+    logger.debug(f"Column dtypes after conversion: {X_pred.dtypes}")
 
     # Initialize results
     all_probs = []
@@ -240,21 +257,28 @@ def predict(
         batch = X_pred.iloc[start_idx:end_idx]
 
         # Get probabilities and SHAP values for batch
-        probs = model.predict_proba(batch)[:, 1]
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(batch)
+        try:
+            probs = model.predict_proba(batch)[:, 1]
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(batch)
 
-        all_probs.extend(probs)
+            all_probs.extend(probs)
 
-        # Generate explanations for batch
-        for i in range(len(batch)):
-            explanation = explain_prediction(
-                model,
-                batch.iloc[[i]],
-                shap_values[i],
-                feature_columns,
-            )
-            all_explanations.append(explanation)
+            # Generate explanations for batch
+            for i in range(len(batch)):
+                explanation = explain_prediction(
+                    model,
+                    batch.iloc[[i]],
+                    shap_values[i],
+                    feature_columns,
+                )
+                all_explanations.append(explanation)
+
+        except Exception as e:
+            logger.error(f"Error during prediction: {e}")
+            logger.error(f"Batch data types: {batch.dtypes}")
+            logger.error(f"First row of batch: {batch.iloc[0].to_dict()}")
+            raise
 
     all_probs = np.array(all_probs)
 
@@ -302,11 +326,29 @@ def predict(
 
 
 if __name__ == "__main__":
+    # Setup MLflow environment
+    MLFLOW_DIR = Path(".mlflow")
+    MLFLOW_DB_DIR = MLFLOW_DIR / "db"
+    MLFLOW_ARTIFACTS_DIR = MLFLOW_DIR / "artifacts"
+
+    # Set MLflow environment variables
+    os.environ["MLFLOW_TRACKING_URI"] = f"sqlite:///{MLFLOW_DB_DIR}/mlflow.db"
+    os.environ["MLFLOW_ARTIFACT_ROOT"] = str(MLFLOW_ARTIFACTS_DIR.absolute())
+
+    # Set tracking URI
+    mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+
     # Load test data
     df_test = pd.read_csv(PROCESSED_DATA_DIR / "test.csv")
     logger.info(f"Loaded test data with {len(df_test)} samples")
 
     # Get model from registry
+    logger.debug(
+        f"[predict.py] MLFLOW_TRACKING_URI from env: {os.environ.get('MLFLOW_TRACKING_URI')}"
+    )
+    logger.debug(
+        f"[predict.py] mlflow.get_tracking_uri() before client: {mlflow.get_tracking_uri()}"
+    )
     client = MlflowClient(mlflow.get_tracking_uri())
     model_info = get_model_by_alias(client, alias="champion")
 
@@ -334,9 +376,19 @@ if __name__ == "__main__":
     loaded_model = mlflow.catboost.load_model(model_uri)
 
     params = run_data_dict["params"]
-    params["feature_columns"] = [
-        inp["name"] for inp in json.loads(log_model_meta[0]["signature"]["inputs"])
-    ]
+
+    # Check if signature exists in the model metadata
+    if "signature" in log_model_meta[0]:
+        # Get feature names from signature if available
+        params["feature_columns"] = [
+            inp["name"] for inp in json.loads(log_model_meta[0]["signature"]["inputs"])
+        ]
+    else:
+        # Fallback to using all columns in the test data except the target
+        logger.warning(
+            "Model signature not found in metadata. Using all test data columns as features."
+        )
+        params["feature_columns"] = [col for col in df_test.columns if col != target]
 
     # Make predictions with explanations
     logger.info("Making predictions with explanations...")
