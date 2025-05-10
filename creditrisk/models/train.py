@@ -507,27 +507,41 @@ def plot_error_scatter(  # noqa: PLR0913
 
 
 def get_or_create_experiment(experiment_name: str) -> str:
-    """Get or create an MLflow experiment.
-
-    Retrieves an existing MLflow experiment by name or creates a new one if it
-    doesn't exist. This ensures consistent experiment tracking across multiple
-    training runs.
-
-    Args:
-        experiment_name: Name of the MLflow experiment
-
-    Returns:
-        Experiment ID (string)
-
-    Example:
-        >>> experiment_id = get_or_create_experiment("credit_default_training")
-        >>> mlflow.set_experiment(experiment_id=experiment_id)
-
-    """
-    if experiment := mlflow.get_experiment_by_name(experiment_name):
-        return experiment.experiment_id
-
-    return mlflow.create_experiment(experiment_name)
+    """Get or create MLflow experiment."""
+    client = MlflowClient()
+    experiment = client.get_experiment_by_name(experiment_name)
+    if experiment is None:
+        logger.info(f"Creating new experiment: {experiment_name}")
+        # Let MLflow determine the default artifact location based on MLFLOW_ARTIFACT_ROOT.
+        # This is typically file://<MLFLOW_ARTIFACT_ROOT>/<experiment_id>.
+        # The MLFLOW_ARTIFACT_ROOT is already set by this script to $PWD/.mlflow/artifacts.
+        experiment_id = client.create_experiment(experiment_name)
+        new_experiment = client.get_experiment(
+            experiment_id
+        )  # Fetch to log its actual artifact_location
+        logger.info(
+            f"Created experiment '{experiment_name}' with ID {experiment_id} "
+            f"and artifact location '{new_experiment.artifact_location}'",
+        )
+        experiment = new_experiment
+    else:
+        logger.info(
+            f"Using existing experiment: {experiment_name}, ID: {experiment.experiment_id}, "
+            f"Artifact Location: {experiment.artifact_location}",
+        )
+        # Add a check for problematic artifact locations in existing experiments.
+        # This won't fix it but will warn the user.
+        current_artifact_location_str = experiment.artifact_location
+        if current_artifact_location_str.startswith(
+            "file:///home/a"
+        ) or current_artifact_location_str.startswith("/home/a"):
+            logger.warning(
+                f"The existing experiment '{experiment_name}' has a problematic artifact location "
+                f"'{current_artifact_location_str}' pointing to a local '/home/a' path. "
+                "This will likely cause issues in CI or other environments. "
+                "Please clean the mlflow.db to use relative paths or paths appropriate for your MLFLOW_ARTIFACT_ROOT.",
+            )
+    return experiment.experiment_id
 
 
 # def champion_callback(study, frozen_trial):

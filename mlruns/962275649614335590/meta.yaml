@@ -1,6 +1,0 @@
-artifact_location: file:///home/a/code/learning/mlops-credit-default/mlruns/962275649614335590
-creation_time: 1746888138080
-experiment_id: '962275649614335590'
-last_update_time: 1746888138080
-lifecycle_stage: active
-name: credit_default_full_training
