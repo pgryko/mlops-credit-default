@@ -16,6 +16,7 @@ Functions:
 """
 
 from pathlib import Path
+import os
 
 from catboost import CatBoostClassifier, Pool, cv
 import joblib
@@ -45,8 +46,20 @@ from creditrisk.core.metrics import (
 )
 from creditrisk.utils.helpers import get_git_commit_hash
 
+# Create MLflow directories if they don't exist
+MLFLOW_DIR = Path(".mlflow")
+MLFLOW_DB_DIR = MLFLOW_DIR / "db"
+MLFLOW_ARTIFACTS_DIR = MLFLOW_DIR / "artifacts"
+
+MLFLOW_DB_DIR.mkdir(parents=True, exist_ok=True)
+MLFLOW_ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Set MLflow environment variables
+os.environ["MLFLOW_TRACKING_URI"] = f"sqlite:///{MLFLOW_DB_DIR}/mlflow.db"
+os.environ["MLFLOW_ARTIFACT_ROOT"] = str(MLFLOW_ARTIFACTS_DIR.absolute())
+
 # Set tracking URI
-mlflow.set_tracking_uri("sqlite:///.mlflow/db/mlflow.db")
+mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
 
 # comment to trigger workflow ver4
 

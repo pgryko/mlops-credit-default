@@ -306,6 +306,9 @@
 #          mkdir -p .mlflow/db
 #          mkdir -p .mlflow/artifacts
 #
+#          # Set proper permissions for MLflow directories
+#          chmod -R 775 .mlflow
+#
 #          # Show initial directory structure
 #          echo "Initial directory structure:"
 #          tree
@@ -315,6 +318,15 @@
 #        continue-on-error: true
 #        run: |
 #          source .venv/bin/activate
+#
+#          # Ensure MLflow directories exist and have correct permissions
+#          mkdir -p .mlflow/db
+#          mkdir -p .mlflow/artifacts
+#          chmod -R 775 .mlflow
+#
+#          # Set MLflow environment variables
+#          export MLFLOW_TRACKING_URI="sqlite:///$PWD/.mlflow/db/mlflow.db"
+#          export MLFLOW_ARTIFACT_ROOT="$PWD/.mlflow/artifacts"
 #
 #          for i in {1..3}; do
 #            echo "Training attempt $i..."
