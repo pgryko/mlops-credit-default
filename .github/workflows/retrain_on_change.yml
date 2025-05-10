@@ -401,7 +401,7 @@ jobs:
           git add models/
           git add reports/figures/
           git add data/processed/
-          git add mlruns/
+          git add mlruns/. # Add all contents of mlruns
 
           if ! git diff --cached --quiet; then
             git commit -m "Update ML artifacts [skip ci]"
