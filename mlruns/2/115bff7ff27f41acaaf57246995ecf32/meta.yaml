@@ -1,0 +1,14 @@
+artifact_uri: file:////home/runner/work/mlops-credit-default/mlops-credit-default/mlruns/2/115bff7ff27f41acaaf57246995ecf32/artifacts
+end_time: 1746899313621
+entry_point_name: ''
+experiment_id: '2'
+lifecycle_stage: active
+run_id: 115bff7ff27f41acaaf57246995ecf32
+run_name: Credit Default Prediction Run
+run_uuid: 115bff7ff27f41acaaf57246995ecf32
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1746899313621
+status: 3
+user_id: ''

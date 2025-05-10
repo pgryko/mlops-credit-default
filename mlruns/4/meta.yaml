@@ -1,0 +1,6 @@
+artifact_location: file:////home/runner/work/mlops-credit-default/mlops-credit-default/mlruns/4
+creation_time: 1746899313621
+experiment_id: '4'
+last_update_time: 1746899313621
+lifecycle_stage: active
+name: Credit Default Experiment 4
