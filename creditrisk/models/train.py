@@ -512,35 +512,101 @@ def get_or_create_experiment(experiment_name: str) -> str:
     experiment = client.get_experiment_by_name(experiment_name)
     if experiment is None:
         logger.info(f"Creating new experiment: {experiment_name}")
-        # Let MLflow determine the default artifact location based on MLFLOW_ARTIFACT_ROOT.
-        # This is typically file://<MLFLOW_ARTIFACT_ROOT>/<experiment_id>.
-        # The MLFLOW_ARTIFACT_ROOT is already set by this script to $PWD/.mlflow/artifacts.
-        experiment_id = client.create_experiment(experiment_name)
-        new_experiment = client.get_experiment(
-            experiment_id
-        )  # Fetch to log its actual artifact_location
+        # Ensure the mlruns directory for the experiment ID will exist for artifact storage
+        # MLflow will create subdirectories per run.
+        # We will explicitly set a relative artifact_location.
+
+        # First, create the experiment to get an ID
+        temp_experiment_id = client.create_experiment(name=experiment_name)
+
+        # Define the desired relative artifact location
+        relative_artifact_location = f"mlruns/{temp_experiment_id}"
+
+        # Update the experiment with the relative artifact location
+        # Note: create_experiment doesn't allow setting artifact_location to a relative path that
+        # doesn't match the scheme of MLFLOW_ARTIFACT_ROOT if it's set to an absolute path.
+        # So, we create it, then update. Or, ensure MLFLOW_ARTIFACT_ROOT is not set before this,
+        # or set it to a relative path itself.
+        # For simplicity here, we'll update it.
+        # A cleaner way might be to ensure MLFLOW_ARTIFACT_ROOT is relative or unset if creating experiments
+        # intended for pure relative artifact paths within mlruns.
+        # However, the current script sets MLFLOW_ARTIFACT_ROOT to an absolute path.
+        # Let's try creating with the desired relative path directly.
+        # If MLflow defaults to file:// scheme, this should become file:mlruns/<experiment_id>
+        # which is resolved relative to the CWD when the UI or client accesses it.
+
+        try:
+            # Attempt to delete the temporarily created experiment if exists, to recreate with artifact_location
+            # This is a bit of a workaround because create_experiment's behavior with artifact_location
+            # can be tricky when MLFLOW_ARTIFACT_ROOT is an absolute path.
+            client.delete_experiment(temp_experiment_id)
+        except Exception:
+            pass  # If it wasn't created or already deleted, fine.
+
+        experiment_id = client.create_experiment(
+            name=experiment_name,
+            artifact_location=relative_artifact_location,
+        )
+        experiment = client.get_experiment(experiment_id)
         logger.info(
             f"Created experiment '{experiment_name}' with ID {experiment_id} "
-            f"and artifact location '{new_experiment.artifact_location}'",
+            f"and artifact location '{experiment.artifact_location}' (intended relative: {relative_artifact_location})",
         )
-        experiment = new_experiment
     else:
         logger.info(
             f"Using existing experiment: {experiment_name}, ID: {experiment.experiment_id}, "
             f"Artifact Location: {experiment.artifact_location}",
         )
-        # Add a check for problematic artifact locations in existing experiments.
-        # This won't fix it but will warn the user.
-        current_artifact_location_str = experiment.artifact_location
-        if current_artifact_location_str.startswith(
-            "file:///home/a"
-        ) or current_artifact_location_str.startswith("/home/a"):
+        # Check and correct problematic absolute artifact locations
+        current_artifact_location = str(experiment.artifact_location or "")
+        new_relative_location = f"mlruns/{experiment.experiment_id}"
+
+        # Check for common CI absolute paths or user-specific absolute paths
+        # The key is that the artifact_location in the DB should be relative for portability.
+        is_problematic_abs_path = (
+            current_artifact_location.startswith("/home/runner/work/")
+            or current_artifact_location.startswith("file:///home/runner/work/")
+            or current_artifact_location.startswith("/home/a/")
+            or current_artifact_location.startswith("file:///home/a/")
+            # Add any other known problematic absolute prefixes if necessary
+        )
+
+        if (
+            is_problematic_abs_path
+            and current_artifact_location != new_relative_location
+            and not current_artifact_location.startswith("mlruns/")
+        ):
             logger.warning(
-                f"The existing experiment '{experiment_name}' has a problematic artifact location "
-                f"'{current_artifact_location_str}' pointing to a local '/home/a' path. "
-                "This will likely cause issues in CI or other environments. "
-                "Please clean the mlflow.db to use relative paths or paths appropriate for your MLFLOW_ARTIFACT_ROOT.",
+                f"Experiment '{experiment_name}' (ID: {experiment.experiment_id}) has a problematic absolute artifact location: '{current_artifact_location}'. "
+                f"Attempting to update to relative path: '{new_relative_location}'.",
             )
+            try:
+                client.update_experiment(
+                    experiment_id=experiment.experiment_id,
+                    new_name=None,  # Keep current name
+                    new_artifact_location=new_relative_location,
+                )
+                # Fetch the experiment again to confirm the change
+                experiment = client.get_experiment(experiment.experiment_id)
+                logger.info(
+                    f"Successfully updated artifact location for experiment '{experiment_name}' to '{experiment.artifact_location}'.",
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update artifact location for experiment '{experiment_name}': {e}. "
+                    "Manual correction of mlflow.db might be needed if artifacts are not visible in UI.",
+                )
+        elif not current_artifact_location.startswith(
+            "mlruns/"
+        ) and not current_artifact_location.startswith("file:mlruns/"):
+            # If it's not an mlruns path, and not one of the specific absolute paths we fixed,
+            # it might be another form of absolute path or a non-standard relative one.
+            # This is a good place to warn if it doesn't look like a portable relative path.
+            logger.warning(
+                f"Experiment '{experiment_name}' (ID: {experiment.experiment_id}) has an artifact location '{current_artifact_location}' "
+                f"that is not a standard relative 'mlruns/' path. This might cause UI issues.",
+            )
+
     return experiment.experiment_id
 
 
