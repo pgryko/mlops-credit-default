@@ -15,8 +15,8 @@ Functions:
 
 """
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 from catboost import CatBoostClassifier, Pool, cv
 import joblib
@@ -377,7 +377,7 @@ def train(
 
         # Set an alias for this model version (modern approach instead of stages)
         # First get the model version from the returned model_info
-        model_version = model_info.version
+        model_version = model_info.registered_model_version
 
         # Set the alias and tag
         client.set_registered_model_alias(MODEL_NAME, "challenger", model_version)
