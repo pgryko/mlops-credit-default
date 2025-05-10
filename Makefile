@@ -50,4 +50,4 @@ resolve:
 
 .PHONY: predict
 predict:
-	python -m creditrisk.models.predict
+	./scripts/run_predict.sh

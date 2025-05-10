@@ -13,13 +13,13 @@ from creditrisk.core.config import MODEL_NAME
 def get_model_by_alias(client, model_name: str = MODEL_NAME, alias: str = "champion"):
     """Get model version by alias, handling the case where model doesn't exist."""
     logger.debug(
-        f"[resolve.py/get_model_by_alias] MLFLOW_TRACKING_URI from env: {os.environ.get('MLFLOW_TRACKING_URI')}"
+        f"[resolve.py/get_model_by_alias] MLFLOW_TRACKING_URI from env: {os.environ.get('MLFLOW_TRACKING_URI')}",
     )
     logger.debug(
-        f"[resolve.py/get_model_by_alias] mlflow.get_tracking_uri() from client: {client.tracking_uri}"
+        f"[resolve.py/get_model_by_alias] mlflow.get_tracking_uri() from client: {client.tracking_uri}",
     )
     logger.debug(
-        f"[resolve.py/get_model_by_alias] Effective client tracking_uri: {client._tracking_client.tracking_uri}"
+        f"[resolve.py/get_model_by_alias] Effective client tracking_uri: {client._tracking_client.tracking_uri}",
     )
     try:
         # First check if the registered model exists
@@ -29,7 +29,7 @@ def get_model_by_alias(client, model_name: str = MODEL_NAME, alias: str = "champ
             # Check for the specific error code for resource not found
             if hasattr(e, "error_code") and e.error_code == "RESOURCE_DOES_NOT_EXIST":
                 logger.info(
-                    f"Model {model_name} not found in registry (error_code: RESOURCE_DOES_NOT_EXIST)"
+                    f"Model {model_name} not found in registry (error_code: RESOURCE_DOES_NOT_EXIST)",
                 )
                 return None
             # Fallback for older MLflow versions or different exception structures, check string content
@@ -39,11 +39,11 @@ def get_model_by_alias(client, model_name: str = MODEL_NAME, alias: str = "champ
                 or f"Registered Model with name={model_name} not found" in str(e)
             ):
                 logger.info(
-                    f"Model {model_name} not found in registry (string match fallback: {e!s})"
+                    f"Model {model_name} not found in registry (string match fallback: {e!s})",
                 )
                 return None
             logger.error(
-                f"An MlflowException occurred while trying to get registered model '{model_name}': {e}"
+                f"An MlflowException occurred while trying to get registered model '{model_name}': {e}",
             )
             raise  # Re-raise if it's not a recognized "not found" exception
 
@@ -55,7 +55,7 @@ def get_model_by_alias(client, model_name: str = MODEL_NAME, alias: str = "champ
                 hasattr(e, "error_code") and e.error_code == "RESOURCE_DOES_NOT_EXIST"
             ):  # Also check for alias not found
                 logger.info(
-                    f"Alias '{alias}' not found for model '{model_name}' (error_code: RESOURCE_DOES_NOT_EXIST)"
+                    f"Alias '{alias}' not found for model '{model_name}' (error_code: RESOURCE_DOES_NOT_EXIST)",
                 )
                 return None
             # Fallback for older MLflow versions or different exception structures for alias not found
@@ -66,16 +66,16 @@ def get_model_by_alias(client, model_name: str = MODEL_NAME, alias: str = "champ
                 or "Registered model alias" in str(e)
             ):
                 logger.info(
-                    f"Alias '{alias}' not found for model '{model_name}' (string match fallback: {e!s})"
+                    f"Alias '{alias}' not found for model '{model_name}' (string match fallback: {e!s})",
                 )
                 return None
             logger.error(
-                f"An MlflowException occurred while trying to get model version by alias '{alias}' for model '{model_name}': {e}"
+                f"An MlflowException occurred while trying to get model version by alias '{alias}' for model '{model_name}': {e}",
             )
             raise  # Re-raise if it's not a recognized "not found" exception
     except Exception as e:
         logger.error(
-            f"Unexpected error in get_model_by_alias for {model_name} alias {alias}: {e!s}"
+            f"Unexpected error in get_model_by_alias for {model_name} alias {alias}: {e!s}",
         )
         return None
 
@@ -94,10 +94,10 @@ if __name__ == "__main__":
     mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
 
     logger.debug(
-        f"[resolve.py/__main__] MLFLOW_TRACKING_URI from env: {os.environ.get('MLFLOW_TRACKING_URI')}"
+        f"[resolve.py/__main__] MLFLOW_TRACKING_URI from env: {os.environ.get('MLFLOW_TRACKING_URI')}",
     )
     logger.debug(
-        f"[resolve.py/__main__] mlflow.get_tracking_uri() before client: {mlflow.get_tracking_uri()}"
+        f"[resolve.py/__main__] mlflow.get_tracking_uri() before client: {mlflow.get_tracking_uri()}",
     )
     client = MlflowClient(mlflow.get_tracking_uri())
     champ_mv = get_model_by_alias(client)

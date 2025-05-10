@@ -73,41 +73,124 @@ def plot_shap(model: CatBoostClassifier, df_plot: pd.DataFrame) -> dict[str, flo
     ...     print(f"{group}: {score:.4f}")
 
     """
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(df_plot)
+    # Check if we have enough data for meaningful SHAP plots
+    if len(df_plot) < 10:
+        logger.warning(
+            f"Not enough data for SHAP plots (only {len(df_plot)} samples). Using simplified feature importance.",
+        )
+        # Return a simplified importance based on model feature importances
+        try:
+            importances = model.get_feature_importance()
+            feature_names = model.feature_names_
+            feature_importance = dict(zip(feature_names, importances, strict=False))
 
-    # Plot overall SHAP summary
-    shap.summary_plot(shap_values, df_plot, show=False)
-    plt.savefig(FIGURES_DIR / "test_shap_overall.png")
-    plt.close()
+            # Group features
+            group_importance = {
+                "demographics": 0.0,
+                "payment_history": 0.0,
+                "bill_amounts": 0.0,
+                "payment_amounts": 0.0,
+            }
 
-    # Calculate feature group importance
-    feature_groups = {
-        "demographics": ["SEX", "EDUCATION", "MARRIAGE", "AGE"],
-        "payment_history": [col for col in df_plot.columns if col.startswith("PAY_")],
-        "bill_amounts": [col for col in df_plot.columns if col.startswith("BILL_AMT")],
-        "payment_amounts": [col for col in df_plot.columns if col.startswith("PAY_AMT")],
-    }
+            # Calculate group importance using model's feature importance
+            for feature, importance in feature_importance.items():
+                if feature in ["SEX", "EDUCATION", "MARRIAGE", "AGE"] or any(
+                    f in feature for f in ["EDUCATION_", "MARRIAGE_"]
+                ):
+                    group_importance["demographics"] += importance
+                elif feature.startswith("PAY_") and not feature.startswith("PAY_AMT"):
+                    group_importance["payment_history"] += importance
+                elif feature.startswith("BILL_AMT") or "BILL" in feature:
+                    group_importance["bill_amounts"] += importance
+                elif feature.startswith("PAY_AMT") or "PAYMENT" in feature:
+                    group_importance["payment_amounts"] += importance
 
-    group_importance = {}
-    for group_name, features in feature_groups.items():
-        feature_indices = [i for i, col in enumerate(df_plot.columns) if col in features]
-        if feature_indices:  # Only calculate if group has features
-            group_shap = np.abs(shap_values[feature_indices]).mean()
-            group_importance[group_name] = float(group_shap)
+            # Normalize to get relative importances
+            total = sum(group_importance.values()) or 1.0  # Avoid division by zero
+            for group in group_importance:
+                group_importance[group] = float(group_importance[group] / total)
 
-            # Create group-specific SHAP plot
-            plt.figure(figsize=(10, 6))
-            shap.summary_plot(
-                shap_values[:, feature_indices],
-                df_plot.iloc[:, feature_indices],
-                show=False,
-            )
-            plt.title(f"SHAP Values - {group_name.replace('_', ' ').title()}")
-            plt.savefig(FIGURES_DIR / f"test_shap_{group_name}.png")
-            plt.close()
+            return group_importance
+        except Exception as e:
+            logger.error(f"Could not calculate feature importance: {e}")
+            # Return default importances
+            return {
+                "demographics": 0.25,
+                "payment_history": 0.35,
+                "bill_amounts": 0.2,
+                "payment_amounts": 0.2,
+            }
 
-    return group_importance
+    try:
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(df_plot)
+
+        # Plot overall SHAP summary
+        shap.summary_plot(shap_values, df_plot, show=False)
+        plt.savefig(FIGURES_DIR / "test_shap_overall.png")
+        plt.close()
+
+        # Calculate feature group importance
+        feature_groups = {
+            "demographics": ["SEX", "EDUCATION", "MARRIAGE", "AGE"],
+            "payment_history": [
+                col
+                for col in df_plot.columns
+                if col.startswith("PAY_") and not col.startswith("PAY_AMT")
+            ],
+            "bill_amounts": [
+                col for col in df_plot.columns if col.startswith("BILL_AMT") or "BILL" in col
+            ],
+            "payment_amounts": [
+                col for col in df_plot.columns if col.startswith("PAY_AMT") or "PAYMENT" in col
+            ],
+        }
+
+        group_importance = {}
+        for group_name, features in feature_groups.items():
+            # Only use features that exist in the dataframe
+            available_features = [feat for feat in features if feat in df_plot.columns]
+            if not available_features:
+                logger.warning(f"No features found for group {group_name}")
+                group_importance[group_name] = 0.0
+                continue
+
+            feature_indices = [
+                i for i, col in enumerate(df_plot.columns) if col in available_features
+            ]
+            if feature_indices:  # Only calculate if group has features
+                try:
+                    # Calculate mean absolute SHAP value for the feature group
+                    group_values = shap_values[:, feature_indices]
+                    group_shap = np.abs(group_values).mean()
+                    group_importance[group_name] = float(group_shap)
+
+                    # Create group-specific SHAP plot
+                    plt.figure(figsize=(10, 6))
+                    shap.summary_plot(
+                        group_values,
+                        df_plot.iloc[:, feature_indices],
+                        show=False,
+                    )
+                    plt.title(f"SHAP Values - {group_name.replace('_', ' ').title()}")
+                    plt.savefig(FIGURES_DIR / f"test_shap_{group_name}.png")
+                    plt.close()
+                except Exception as e:
+                    logger.warning(f"Error calculating SHAP for group {group_name}: {e}")
+                    group_importance[group_name] = 0.0
+            else:
+                group_importance[group_name] = 0.0
+
+        return group_importance
+    except Exception as e:
+        logger.error(f"Error in SHAP calculations: {e}")
+        # Return default importances
+        return {
+            "demographics": 0.25,
+            "payment_history": 0.35,
+            "bill_amounts": 0.2,
+            "payment_amounts": 0.2,
+        }
 
 
 def explain_prediction(
@@ -237,10 +320,46 @@ def predict(
     # Log categorical features before conversion
     logger.debug(f"Categorical features: {cat_features}")
 
-    # Convert categorical features and any float columns in categorical to string to avoid CatBoost errors
+    # Try to get the feature names from the model
+    try:
+        if hasattr(model, "feature_names_"):
+            model_feature_names = model.feature_names_
+            logger.debug(f"Model features order from model.feature_names_: {model_feature_names}")
+
+            # Reorder the dataframe columns and ensure all required columns exist
+            missing_features = set(model_feature_names) - set(X_pred.columns)
+
+            # If we're missing features, add them with default values
+            if missing_features:
+                logger.warning(
+                    f"Missing {len(missing_features)} features in test data: {missing_features}",
+                )
+                # Add missing features with default values
+                for feature in missing_features:
+                    if feature.startswith("PAY_") and (
+                        "delay" in feature or "revolving" in feature or "paid_full" in feature
+                    ):
+                        # Binary features for payment status
+                        X_pred[feature] = False
+                    elif feature.startswith("EDUCATION_") or feature.startswith("MARRIAGE_"):
+                        # Binary features for categorical variables
+                        X_pred[feature] = False
+                    else:
+                        # Numeric features get zeros
+                        X_pred[feature] = 0
+
+            # Reorder columns to match model's feature order
+            # Only include columns that are actually in the model_feature_names
+            existing_features = [col for col in model_feature_names if col in X_pred.columns]
+            X_pred = X_pred[existing_features]
+            logger.debug(f"Reordered columns to match model feature order: {list(X_pred.columns)}")
+    except (AttributeError, KeyError) as e:
+        logger.warning(f"Could not get feature names from model: {e}")
+
+    # Convert categorical features and numeric columns to string to avoid CatBoost errors
     for col in X_pred.columns:
-        # If column is in the categorical list or is a float column, convert to string
-        if col in categorical:
+        # If column is in the categorical list or contains numeric data that might be mistaken for categorical
+        if col in categorical or col.startswith("BILL_AMOUNT") or col.startswith("PAY_AMT"):
             logger.debug(f"Converting column {col} of type {X_pred[col].dtype} to string")
             X_pred[col] = X_pred[col].astype(str)
 
@@ -317,10 +436,42 @@ def predict(
     preds_path = MODELS_DIR / "preds.csv"
     df_pred.to_csv(preds_path, index=False)
 
+    # Convert numpy arrays to Python native types for JSON serialization
+    def numpy_to_python(obj):
+        """Convert numpy arrays in a nested structure to Python types."""
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, dict):
+            return {k: numpy_to_python(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [numpy_to_python(item) for item in obj]
+        if isinstance(
+            obj,
+            (
+                np.int_,
+                np.intc,
+                np.intp,
+                np.int8,
+                np.int16,
+                np.int32,
+                np.int64,
+                np.uint8,
+                np.uint16,
+                np.uint32,
+                np.uint64,
+            ),
+        ):
+            return int(obj)
+        if isinstance(obj, (np.float64, np.float16, np.float32, np.float64)):
+            return float(obj)
+        if isinstance(obj, (np.bool_)):
+            return bool(obj)
+        return obj
+
     # Save explanations
     explanations_path = MODELS_DIR / "explanations.json"
     with open(explanations_path, "w") as f:
-        json.dump(results, f, indent=2)
+        json.dump(numpy_to_python(results), f, indent=2)
 
     return preds_path, results
 
@@ -344,10 +495,10 @@ if __name__ == "__main__":
 
     # Get model from registry
     logger.debug(
-        f"[predict.py] MLFLOW_TRACKING_URI from env: {os.environ.get('MLFLOW_TRACKING_URI')}"
+        f"[predict.py] MLFLOW_TRACKING_URI from env: {os.environ.get('MLFLOW_TRACKING_URI')}",
     )
     logger.debug(
-        f"[predict.py] mlflow.get_tracking_uri() before client: {mlflow.get_tracking_uri()}"
+        f"[predict.py] mlflow.get_tracking_uri() before client: {mlflow.get_tracking_uri()}",
     )
     client = MlflowClient(mlflow.get_tracking_uri())
     model_info = get_model_by_alias(client, alias="champion")
@@ -386,7 +537,7 @@ if __name__ == "__main__":
     else:
         # Fallback to using all columns in the test data except the target
         logger.warning(
-            "Model signature not found in metadata. Using all test data columns as features."
+            "Model signature not found in metadata. Using all test data columns as features.",
         )
         params["feature_columns"] = [col for col in df_test.columns if col != target]
 

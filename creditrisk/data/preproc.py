@@ -404,13 +404,13 @@ if __name__ == "__main__":
                 fallback_uci_path = RAW_DATA_DIR / "UCI_Credit_Card.csv"
                 if fallback_uci_path.exists():
                     logger.info(
-                        f"Found {fallback_uci_path.name}, will process it as the primary dataset."
+                        f"Found {fallback_uci_path.name}, will process it as the primary dataset.",
                     )
                     files_to_process.append(fallback_uci_path)
 
         if not files_to_process:
             logger.error(
-                f"No suitable raw data files found in {RAW_DATA_DIR} (expected {raw_train_filename}, {raw_test_filename}, or UCI_Credit_Card.csv as fallback)."
+                f"No suitable raw data files found in {RAW_DATA_DIR} (expected {raw_train_filename}, {raw_test_filename}, or UCI_Credit_Card.csv as fallback).",
             )
             available_files = list(RAW_DATA_DIR.glob("*.csv"))
             if available_files:
@@ -422,7 +422,7 @@ if __name__ == "__main__":
             logger.info(f"Preprocessing {raw_file_path_item.name}...")
             output_path = preprocess_df(raw_file_path_item)
             logger.info(
-                f"Preprocessing for {raw_file_path_item.name} completed. Output saved to {output_path}"
+                f"Preprocessing for {raw_file_path_item.name} completed. Output saved to {output_path}",
             )
 
         # List processed files for verification

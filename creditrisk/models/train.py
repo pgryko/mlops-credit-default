@@ -468,15 +468,20 @@ def plot_error_scatter(  # noqa: PLR0913
         ),
     )
 
-    # Add shaded error region
+    # Create upper and lower bounds for the error band
+    upper_bound = df_plot[y] + df_plot[err]
+    lower_bound = df_plot[y] - df_plot[err]
+
+    # Add shaded error region correctly
     fig.add_trace(
         go.Scatter(
-            x=pd.concat([df_plot[y], df_plot[x][::-1]]),
-            y=pd.concat([df_plot[y] + df_plot[err], df_plot[y] - df_plot[err]]),
+            x=pd.concat([df_plot[x], df_plot[x][::-1]]),  # x, then x reversed
+            y=pd.concat([upper_bound, lower_bound[::-1]]),  # upper, then lower reversed
             fill="toself",
             fillcolor="rgba(0, 0, 255, 0.2)",
             line={"color": "rgba(255, 255, 255, 0)"},
             showlegend=False,
+            name="Error Band",
         ),
     )
 
@@ -494,6 +499,9 @@ def plot_error_scatter(  # noqa: PLR0913
         )
 
     fig.show()
+    # Ensure the figures directory exists
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    # Save the image to the correct location
     fig.write_image(FIGURES_DIR / f"{y}_vs_{x}.png")
     return fig
 
