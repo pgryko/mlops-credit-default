@@ -1,0 +1,109 @@
+artifact_path: model
+flavors:
+  catboost:
+    catboost_version: 1.2.8
+    code: null
+    data: model.cb
+    model_type: CatBoostClassifier
+    save_format: cbm
+  python_function:
+    data: model.cb
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.catboost
+    python_version: 3.11.9
+is_signature_from_type_hint: false
+mlflow_version: 2.22.0
+model_size_bytes: 89491011
+model_uuid: 33d9b9d070a74320a0a1fcafffbd8544
+prompts: null
+run_id: 14e8626dc08740c8bff9a3cb6384309b
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "long", "name": "ID", "required": true}, {"type": "double", "name":
+    "LIMIT_BAL", "required": true}, {"type": "long", "name": "SEX", "required": true},
+    {"type": "long", "name": "AGE", "required": true}, {"type": "double", "name":
+    "BILL_AMT1", "required": true}, {"type": "double", "name": "BILL_AMT2", "required":
+    true}, {"type": "double", "name": "BILL_AMT3", "required": true}, {"type": "double",
+    "name": "BILL_AMT4", "required": true}, {"type": "double", "name": "BILL_AMT5",
+    "required": true}, {"type": "double", "name": "BILL_AMT6", "required": true},
+    {"type": "double", "name": "PAY_AMT1", "required": true}, {"type": "double", "name":
+    "PAY_AMT2", "required": true}, {"type": "double", "name": "PAY_AMT3", "required":
+    true}, {"type": "double", "name": "PAY_AMT4", "required": true}, {"type": "double",
+    "name": "PAY_AMT5", "required": true}, {"type": "double", "name": "PAY_AMT6",
+    "required": true}, {"type": "boolean", "name": "EDUCATION_graduate", "required":
+    true}, {"type": "boolean", "name": "EDUCATION_high_school", "required": true},
+    {"type": "boolean", "name": "EDUCATION_other", "required": true}, {"type": "boolean",
+    "name": "EDUCATION_university", "required": true}, {"type": "boolean", "name":
+    "MARRIAGE_married", "required": true}, {"type": "boolean", "name": "MARRIAGE_other",
+    "required": true}, {"type": "boolean", "name": "MARRIAGE_single", "required":
+    true}, {"type": "boolean", "name": "PAY_0_delay_1m", "required": true}, {"type":
+    "boolean", "name": "PAY_0_delay_2m", "required": true}, {"type": "boolean", "name":
+    "PAY_0_delay_3m", "required": true}, {"type": "boolean", "name": "PAY_0_delay_4m",
+    "required": true}, {"type": "boolean", "name": "PAY_0_delay_5m", "required": true},
+    {"type": "boolean", "name": "PAY_0_delay_6m", "required": true}, {"type": "boolean",
+    "name": "PAY_0_delay_7m", "required": true}, {"type": "boolean", "name": "PAY_0_delay_8m",
+    "required": true}, {"type": "boolean", "name": "PAY_0_no_consumption", "required":
+    true}, {"type": "boolean", "name": "PAY_0_paid_full", "required": true}, {"type":
+    "boolean", "name": "PAY_0_revolving", "required": true}, {"type": "boolean", "name":
+    "PAY_2_delay_1m", "required": true}, {"type": "boolean", "name": "PAY_2_delay_2m",
+    "required": true}, {"type": "boolean", "name": "PAY_2_delay_3m", "required": true},
+    {"type": "boolean", "name": "PAY_2_delay_4m", "required": true}, {"type": "boolean",
+    "name": "PAY_2_delay_5m", "required": true}, {"type": "boolean", "name": "PAY_2_delay_6m",
+    "required": true}, {"type": "boolean", "name": "PAY_2_delay_7m", "required": true},
+    {"type": "boolean", "name": "PAY_2_delay_8m", "required": true}, {"type": "boolean",
+    "name": "PAY_2_no_consumption", "required": true}, {"type": "boolean", "name":
+    "PAY_2_paid_full", "required": true}, {"type": "boolean", "name": "PAY_2_revolving",
+    "required": true}, {"type": "boolean", "name": "PAY_3_delay_1m", "required": true},
+    {"type": "boolean", "name": "PAY_3_delay_2m", "required": true}, {"type": "boolean",
+    "name": "PAY_3_delay_3m", "required": true}, {"type": "boolean", "name": "PAY_3_delay_4m",
+    "required": true}, {"type": "boolean", "name": "PAY_3_delay_5m", "required": true},
+    {"type": "boolean", "name": "PAY_3_delay_6m", "required": true}, {"type": "boolean",
+    "name": "PAY_3_delay_7m", "required": true}, {"type": "boolean", "name": "PAY_3_delay_8m",
+    "required": true}, {"type": "boolean", "name": "PAY_3_no_consumption", "required":
+    true}, {"type": "boolean", "name": "PAY_3_paid_full", "required": true}, {"type":
+    "boolean", "name": "PAY_3_revolving", "required": true}, {"type": "boolean", "name":
+    "PAY_4_delay_1m", "required": true}, {"type": "boolean", "name": "PAY_4_delay_2m",
+    "required": true}, {"type": "boolean", "name": "PAY_4_delay_3m", "required": true},
+    {"type": "boolean", "name": "PAY_4_delay_4m", "required": true}, {"type": "boolean",
+    "name": "PAY_4_delay_5m", "required": true}, {"type": "boolean", "name": "PAY_4_delay_6m",
+    "required": true}, {"type": "boolean", "name": "PAY_4_delay_7m", "required": true},
+    {"type": "boolean", "name": "PAY_4_delay_8m", "required": true}, {"type": "boolean",
+    "name": "PAY_4_no_consumption", "required": true}, {"type": "boolean", "name":
+    "PAY_4_paid_full", "required": true}, {"type": "boolean", "name": "PAY_4_revolving",
+    "required": true}, {"type": "boolean", "name": "PAY_5_delay_2m", "required": true},
+    {"type": "boolean", "name": "PAY_5_delay_3m", "required": true}, {"type": "boolean",
+    "name": "PAY_5_delay_4m", "required": true}, {"type": "boolean", "name": "PAY_5_delay_5m",
+    "required": true}, {"type": "boolean", "name": "PAY_5_delay_6m", "required": true},
+    {"type": "boolean", "name": "PAY_5_delay_7m", "required": true}, {"type": "boolean",
+    "name": "PAY_5_delay_8m", "required": true}, {"type": "boolean", "name": "PAY_5_no_consumption",
+    "required": true}, {"type": "boolean", "name": "PAY_5_paid_full", "required":
+    true}, {"type": "boolean", "name": "PAY_5_revolving", "required": true}, {"type":
+    "boolean", "name": "PAY_6_delay_2m", "required": true}, {"type": "boolean", "name":
+    "PAY_6_delay_3m", "required": true}, {"type": "boolean", "name": "PAY_6_delay_4m",
+    "required": true}, {"type": "boolean", "name": "PAY_6_delay_5m", "required": true},
+    {"type": "boolean", "name": "PAY_6_delay_6m", "required": true}, {"type": "boolean",
+    "name": "PAY_6_delay_7m", "required": true}, {"type": "boolean", "name": "PAY_6_delay_8m",
+    "required": true}, {"type": "boolean", "name": "PAY_6_no_consumption", "required":
+    true}, {"type": "boolean", "name": "PAY_6_paid_full", "required": true}, {"type":
+    "boolean", "name": "PAY_6_revolving", "required": true}, {"type": "double", "name":
+    "UTILIZATION_RATIO_1", "required": true}, {"type": "double", "name": "UTILIZATION_RATIO_2",
+    "required": true}, {"type": "double", "name": "UTILIZATION_RATIO_3", "required":
+    true}, {"type": "double", "name": "UTILIZATION_RATIO_4", "required": true}, {"type":
+    "double", "name": "UTILIZATION_RATIO_5", "required": true}, {"type": "double",
+    "name": "UTILIZATION_RATIO_6", "required": true}, {"type": "double", "name": "AVG_UTILIZATION",
+    "required": true}, {"type": "double", "name": "TOTAL_PAYMENT", "required": true},
+    {"type": "double", "name": "AVG_PAYMENT", "required": true}, {"type": "double",
+    "name": "PAYMENT_TREND", "required": true}, {"type": "double", "name": "PAYMENT_CONSISTENCY",
+    "required": true}, {"type": "double", "name": "TOTAL_BILL", "required": true},
+    {"type": "double", "name": "AVG_BILL", "required": true}, {"type": "double", "name":
+    "BILL_TREND", "required": true}]'
+  outputs: '[{"type": "long", "required": true}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2025-05-10 23:07:39.281648'
