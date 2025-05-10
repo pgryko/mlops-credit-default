@@ -234,7 +234,7 @@ ls -la .mlflow/artifacts
 2. Start the MLflow UI server:
 ```bash
 # Start MLflow UI on port 5000
-mlflow ui --port 5000
+mlflow ui --backend-store-uri sqlite:///.mlflow/db/mlflow.db --default-artifact-root .mlflow/artifacts --port 5000
 ```
 
 3. Access the UI in your browser at: http://127.0.0.1:5000

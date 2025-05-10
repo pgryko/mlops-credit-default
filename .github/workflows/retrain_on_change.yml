@@ -1,524 +1,524 @@
-name: Preproc data and train model
-
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'data/raw/UCI_Credit_Card.csv'
-      - 'creditrisk/**/*.py'
-      - 'models/best_params.pkl'
-      - '.github/workflows/retrain_on_change.yml'
-  workflow_dispatch:
-
-# Prevent multiple workflow runs from conflicting
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  preprocess:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30  # Add timeout to prevent hung jobs
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-          cache: 'pip'  # Cache pip dependencies
-          
-      - name: Install dependencies
-        run: |
-          python -m pip install -U pip uv
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e .
-          uv pip install python-dotenv  # Ensure correct dotenv package
-          uv pip install pylint  # Install for linting
-        
-      - name: Setup environment
-        run: |
-          # Install tree command
-          sudo apt-get update
-          sudo apt-get install -y tree
-          
-          # Create all required directories
-          mkdir -p data/raw
-          mkdir -p data/processed
-          mkdir -p data/interim
-          mkdir -p data/external
-          mkdir -p models
-          mkdir -p reports/figures
-          
-          # Show initial directory structure
-          echo "Initial directory structure:"
-          tree
-          
-      - name: Run preprocessing
-        id: preprocess
-        env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-        continue-on-error: true
-        run: |
-          source .venv/bin/activate
-          
-          # Validate Kaggle credentials
-          if [ -z "$KAGGLE_USERNAME" ] || [ -z "$KAGGLE_KEY" ]; then
-            echo "Error: Kaggle credentials not provided"
-            exit 1
-          fi
-          
-          # Create Kaggle config
-          mkdir -p $HOME/.config/kaggle
-          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > $HOME/.config/kaggle/kaggle.json
-          chmod 600 $HOME/.config/kaggle/kaggle.json
-          
-          # Run linting on key files
-          echo "Linting core config file:"
-          python -m pylint creditrisk/core/config.py --disable=C,R
-          echo "Linting preprocessing file:"
-          python -m pylint creditrisk/data/preproc.py --disable=C,R
-          
-          # Run preprocessing with retries (includes download)
-          for i in {1..3}; do
-            echo "Preprocessing attempt $i..."
-            echo "Current directory structure:"
-            tree data/
-            
-            # Run preprocessing with output capture and debug logging
-            echo "Python environment:"
-            echo "PYTHONPATH=$PWD"
-            echo "PROJ_ROOT=$PWD"
-            python -c "import sys; print(sys.path)" 2>&1 | tee debug.log
-            
-            # Debug - print path structure and config
-            python -c "import os; import sys; from pathlib import Path; print('Current working directory:', os.getcwd()); print('Python paths:', sys.path); print('Environment PROJ_ROOT:', os.environ.get('PROJ_ROOT')); print('Environment PYTHONPATH:', os.environ.get('PYTHONPATH')); print('Listing data directory:'); [print(f'  {p}') for p in Path('data').glob('**/*')]" 2>&1 | tee -a debug.log
-
-            # Try running with explicit DATA_DIR environment variable
-            if PYTHONPATH=$PWD PROJ_ROOT=$PWD DATA_DIR=$PWD/data PROCESSED_DATA_DIR=$PWD/data/processed MODELS_DIR=$PWD/models LOGURU_LEVEL=DEBUG python -m creditrisk.data.preproc 2>&1 | tee preprocess.log; then
-              echo "Preprocessing script completed using module approach, checking output..."
-            elif PYTHONPATH=$PWD PROJ_ROOT=$PWD DATA_DIR=$PWD/data PROCESSED_DATA_DIR=$PWD/data/processed MODELS_DIR=$PWD/models LOGURU_LEVEL=DEBUG python creditrisk/data/preproc.py 2>&1 | tee preprocess.log; then
-              echo "Preprocessing script completed using direct file approach, checking output..."
-              echo "Preprocessing script completed, checking output..."
-              
-              if [ ! -f "data/raw/UCI_Credit_Card.csv" ]; then
-                echo "Error: Raw data file not downloaded"
-                echo "Current directory structure:"
-                tree
-                echo "Debug info:"
-                cat debug.log
-                echo "Process log:"
-                cat preprocess.log
-                exit 1
-              fi
-              
-              if [ -z "$(ls -A data/processed)" ]; then
-                echo "Error: No processed files generated"
-                echo "Current directory structure:"
-                tree data/
-                echo "Detailed directory listing:"
-                find . -type f -name "*.csv" | sort
-                echo "Debug info:"
-                cat debug.log
-                echo "Process log:"
-                cat preprocess.log
-                
-                # Create a sample processed file as fallback
-                echo "Creating a fallback processed file for testing"
-                if [ -f "data/raw/UCI_Credit_Card.csv" ]; then
-                  # Just copy the raw file as a fallback
-                  cp "data/raw/UCI_Credit_Card.csv" "data/processed/UCI_Credit_Card_processed.csv"
-                  echo "Created fallback processed file"
-                  ls -la data/processed/
-                else
-                  echo "Cannot create fallback - raw file does not exist"
-                  exit 1
-                fi
-              fi
-              
-              echo "Preprocessing completed successfully"
-              echo "Final directory structure:"
-              tree data/
-              exit 0
-            fi
-            
-            echo "Attempt $i failed"
-            echo "Current directory structure:"
-            tree
-            echo "Process log:"
-            cat preprocess.log
-            echo "Retrying in 5 seconds..."
-            sleep 5
-          done
-          
-          echo "All preprocessing attempts failed"
-          echo "Final directory structure:"
-          tree
-          echo "Final attempt log:"
-          cat preprocess.log
-          exit 1
-          
-      - name: Verify processed data
-        if: success()
-        id: verify_preproc
-        run: |
-          if [ ! -d "data/processed" ]; then
-            echo "Error: Processed data directory does not exist"
-            exit 1
-          fi
-          
-          if [ -z "$(ls -A data/processed)" ]; then
-            echo "Error: Processed data directory is empty"
-            ls -la data/  # List contents of parent directory for debugging
-            exit 1
-          fi
-          
-          echo "Contents of processed data directory:"
-          ls -la data/processed/
-          echo "Processed data verified successfully"
-
-      - name: Upload processed data
-        if: success() && steps.verify_preproc.outcome == 'success'
-        run: |
-          echo "Final verification before uploading artifact:"
-          ls -la data/processed/
-          find data -type f | grep -v "__pycache__" | sort
-          
-          # Create a backup copy of the processed data just in case
-          mkdir -p data/processed_backup
-          cp -v data/processed/* data/processed_backup/ 2>/dev/null || echo "No files to backup"
-        
-      - name: Upload processed data artifact
-        if: success() && steps.verify_preproc.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: processed-data
-          path: data/processed
-          retention-days: 1  # Only keep for duration needed
-          
-      # - name: Notify on preprocessing failure
-      #   if: failure()
-      #   uses: actions/github-script@v7
-      #   with:
-      #     script: |
-      #       github.rest.issues.create({
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         title: 'Preprocessing failed in retraining workflow',
-      #         body: `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-      #       })
-
-  train:
-    needs: preprocess
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      actions: write
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          
-      - name: Download processed data
-        id: download
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: processed-data
-          path: data/processed
-          
-      - name: Verify download
-        run: |
-          echo "Checking downloaded artifact:"
-          if [ -d "data/processed" ]; then
-            echo "Processed directory exists"
-            find data/processed -type f | sort
-            ls -la data/processed/
-          else
-            echo "Error: Processed directory not found after download"
-            mkdir -p data/processed
-          fi
-
-      - name: Verify processed data
-        id: verify
-        run: |
-          echo "Checking processed data directory..."
-          if [ ! -d "data/processed" ]; then
-            echo "Error: Processed data directory does not exist"
-            echo "Current directory structure:"
-            tree data/
-            exit 1
-          fi
-          
-          if [ -z "$(ls -A data/processed)" ]; then
-            echo "Error: Processed data directory is empty"
-            echo "Current directory structure:"
-            tree data/
-            echo "Detailed directory listing:"
-            find . -type f -name "*.csv" | sort
-            exit 1
-          fi
-          
-          echo "Contents of processed data directory:"
-          ls -la data/processed/
-          echo "Processed data verified successfully"
-
-      - name: Fail if data verification failed
-        if: failure()
-        run: exit 1
-          
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-          cache: 'pip'
-          
-      - name: Install dependencies
-        run: |
-          python -m pip install -U pip uv
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e .
-          uv pip install python-dotenv  # Ensure correct dotenv package
-          
-      - name: Setup environment
-        run: |
-          # Install tree command
-          sudo apt-get update
-          sudo apt-get install -y tree
-          
-          # Create all required directories
-          mkdir -p data/raw
-          mkdir -p data/processed
-          mkdir -p data/interim
-          mkdir -p data/external
-          mkdir -p models
-          mkdir -p reports/figures
-          mkdir -p .mlflow/db
-          mkdir -p .mlflow/artifacts
-          
-          # Show initial directory structure
-          echo "Initial directory structure:"
-          tree
-          
-      - name: Run training
-        id: train
-        continue-on-error: true
-        run: |
-          source .venv/bin/activate
-          
-          for i in {1..3}; do
-            echo "Training attempt $i..."
-            echo "Current directory structure:"
-            tree
-            
-            # Show Python environment
-            echo "Python environment:"
-            echo "PYTHONPATH=$PWD"
-            echo "PROJ_ROOT=$PWD"
-            python -c "import sys; print(sys.path)" 2>&1 | tee debug.log
-            
-            # Print detailed debug info
-            python -c "import os; import sys; from pathlib import Path; print('Current working directory:', os.getcwd()); print('Python paths:', sys.path); print('Environment PROJ_ROOT:', os.environ.get('PROJ_ROOT')); print('Environment PYTHONPATH:', os.environ.get('PYTHONPATH')); print('Listing data directory:'); [print(f'  {p}') for p in Path('data').glob('**/*')]" 2>&1 | tee -a debug.log
-            
-            # Run training with output capture and explicit directory paths
-            if PYTHONPATH=$PWD PROJ_ROOT=$PWD DATA_DIR=$PWD/data PROCESSED_DATA_DIR=$PWD/data/processed MODELS_DIR=$PWD/models MODEL_NAME=credit-default-classifier LOGURU_LEVEL=DEBUG python -m creditrisk.models.train 2>&1 | tee train.log; then
-              echo "Training completed successfully"
-              echo "Final directory structure:"
-              tree
-              exit 0
-            fi
-            
-            echo "Attempt $i failed"
-            echo "Current directory structure:"
-            tree
-            echo "Training log:"
-            cat train.log
-            echo "Retrying in 5 seconds..."
-            sleep 5
-          done
-          
-          echo "All training attempts failed"
-          echo "Final directory structure:"
-          tree
-          echo "Final attempt log:"
-          cat train.log
-          exit 1
-
-      - name: Create MLflow meta files and copy artifacts
-        if: success() || failure()
-        run: |
-          source .venv/bin/activate
-
-          # Prepare variables
-          CURR_DIR=$(pwd)
-          TIMESTAMP=$(date +%s%3N)
-
-          # Create experiment meta.yaml files
-          mkdir -p mlruns/2
-          if [ ! -f "mlruns/2/meta.yaml" ]; then
-            echo "Creating experiment meta.yaml for experiment ID 2"
-            {
-              echo "artifact_location: file:///$CURR_DIR/mlruns/2"
-              echo "creation_time: $TIMESTAMP"
-              echo "experiment_id: '2'"
-              echo "last_update_time: $TIMESTAMP"
-              echo "lifecycle_stage: active"
-              echo "name: Credit Default Experiment 2"
-            } > mlruns/2/meta.yaml
-          fi
-
-          mkdir -p mlruns/4
-          if [ ! -f "mlruns/4/meta.yaml" ]; then
-            echo "Creating experiment meta.yaml for experiment ID 4"
-            {
-              echo "artifact_location: file:///$CURR_DIR/mlruns/4"
-              echo "creation_time: $TIMESTAMP"
-              echo "experiment_id: '4'"
-              echo "last_update_time: $TIMESTAMP"
-              echo "lifecycle_stage: active"
-              echo "name: Credit Default Experiment 4"
-            } > mlruns/4/meta.yaml
-          fi
-
-          # Create meta.yaml files for all run directories
-          for run_dir in mlruns/*/*/; do
-            if [[ $run_dir != *meta.yaml* ]] && [[ $run_dir != */*/ ]]; then
-              continue
-            fi
-
-            run_id=$(basename "$run_dir")
-            exp_id=$(basename "$(dirname "$run_dir")")
-
-            if [ ! -f "${run_dir}meta.yaml" ]; then
-              echo "Creating run meta.yaml in ${run_dir}"
-              {
-                echo "artifact_uri: file:///$CURR_DIR/${run_dir}artifacts"
-                echo "end_time: $TIMESTAMP"
-                echo "entry_point_name: ''"
-                echo "experiment_id: '$exp_id'"
-                echo "lifecycle_stage: active"
-                echo "run_id: $run_id"
-                echo "run_name: Credit Default Prediction Run"
-                echo "run_uuid: $run_id"
-                echo "source_name: ''"
-                echo "source_type: 4"
-                echo "source_version: ''"
-                echo "start_time: $TIMESTAMP"
-                echo "status: 3"
-                echo "user_id: ''"
-              } > "${run_dir}meta.yaml"
-
-              # Create artifacts directory if it doesn't exist
-              mkdir -p "${run_dir}artifacts"
-
-              # Copy all figures from reports/figures to the run's artifacts directory
-              if [ -d "reports/figures" ]; then
-                echo "Copying figures to ${run_dir}artifacts/"
-                cp -v reports/figures/*.png "${run_dir}artifacts/" 2>/dev/null || echo "No figures to copy"
-              fi
-
-              # Create metrics.json with model statistics if it doesn't exist
-              if [ ! -f "${run_dir}metrics.json" ] && [ -f "models/cv_results.csv" ]; then
-                echo "Creating metrics.json for ${run_dir}"
-
-                # Get some values from CV results if possible
-                if [ -f "models/cv_results.csv" ]; then
-                  F1_MEAN=$(awk -F, 'NR>1 {sum+=$2} END {print sum/(NR-1)}' models/cv_results.csv 2>/dev/null || echo "0.75")
-                else
-                  F1_MEAN="0.75"
-                fi
-
-                # Create metrics.json using a command
-                python3 -c "import json; f=open('${run_dir}metrics.json', 'w'); json.dump([{'key': 'f1_cv_mean', 'value': ${F1_MEAN}, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'precision', 'value': 0.82, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'recall', 'value': 0.75, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'pr_auc', 'value': 0.80, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'approval_rate', 'value': 0.85, 'timestamp': ${TIMESTAMP}, 'step': 0}], f, indent=2); f.close()"
-                echo "Created metrics.json for ${run_dir}"
-              fi
-            fi
-          done
-
-          echo "MLflow meta files and artifacts created"
-          find mlruns -name "meta.yaml"
-
-          echo "Artifacts copied:"
-          find mlruns -path "*/artifacts/*" -type f | sort
-
-      - name: Update ML artifacts
-        if: success() && steps.train.outcome == 'success'
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
-        run: |
-          # First, disable branch protection
-          echo "Disabling branch protection..."
-          curl -L \
-            -X DELETE \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/${{ github.repository }}/branches/main/protection
-
-          # Configure git
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          
-          # Push directly to main
-          git add .mlflow/artifacts/
-          git add .mlflow/db/
-          git add models/
-          git add reports/figures/
-          git add data/processed/
-          git add mlruns/
-          
-          if ! git diff --cached --quiet; then
-            git commit -m "Update ML artifacts [skip ci]"
-            git push origin main
-          else
-            echo "No changes to commit"
-          fi
-
-          # Restore branch protection
-          echo "Restoring branch protection..."
-          curl -L \
-            -X PUT \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/${{ github.repository }}/branches/main/protection \
-            -d '{
-              "required_status_checks": null,
-              "enforce_admins": false,
-              "required_pull_request_reviews": {
-                "required_approving_review_count": 1
-              },
-              "restrictions": null,
-              "required_linear_history": false,
-              "allow_force_pushes": false,
-              "allow_deletions": false
-            }'
-          
-      - name: Trigger Predict Workflow
-        if: success()
-        uses: peter-evans/repository-dispatch@v2
-        with:
-          token: ${{ secrets.WORKFLOW_PAT }}  # Use a personal access token
-          event-type: trigger-predict
-          
-      # - name: Notify on training failure
-      #   if: failure()
-      #   uses: actions/github-script@v7
-      #   with:
-      #     script: |
-      #       github.rest.issues.create({
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         title: 'Training failed in retraining workflow',
-      #         body: `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-      #       })
+#name: Preproc data and train model
+#
+#on:
+#  push:
+#    branches:
+#      - main
+#    paths:
+#      - 'data/raw/UCI_Credit_Card.csv'
+#      - 'creditrisk/**/*.py'
+#      - 'models/best_params.pkl'
+#      - '.github/workflows/retrain_on_change.yml'
+#  workflow_dispatch:
+#
+## Prevent multiple workflow runs from conflicting
+#concurrency:
+#  group: ${{ github.workflow }}-${{ github.ref }}
+#  cancel-in-progress: true
+#
+#jobs:
+#  preprocess:
+#    runs-on: ubuntu-latest
+#    timeout-minutes: 30  # Add timeout to prevent hung jobs
+#    steps:
+#      - name: Checkout repository
+#        uses: actions/checkout@v4
+#
+#      - name: Set up Python
+#        uses: actions/setup-python@v4
+#        with:
+#          python-version: "3.11"
+#          cache: 'pip'  # Cache pip dependencies
+#
+#      - name: Install dependencies
+#        run: |
+#          python -m pip install -U pip uv
+#          uv venv
+#          source .venv/bin/activate
+#          uv pip install -e .
+#          uv pip install python-dotenv  # Ensure correct dotenv package
+#          uv pip install pylint  # Install for linting
+#
+#      - name: Setup environment
+#        run: |
+#          # Install tree command
+#          sudo apt-get update
+#          sudo apt-get install -y tree
+#
+#          # Create all required directories
+#          mkdir -p data/raw
+#          mkdir -p data/processed
+#          mkdir -p data/interim
+#          mkdir -p data/external
+#          mkdir -p models
+#          mkdir -p reports/figures
+#
+#          # Show initial directory structure
+#          echo "Initial directory structure:"
+#          tree
+#
+#      - name: Run preprocessing
+#        id: preprocess
+#        env:
+#          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+#          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+#        continue-on-error: true
+#        run: |
+#          source .venv/bin/activate
+#
+#          # Validate Kaggle credentials
+#          if [ -z "$KAGGLE_USERNAME" ] || [ -z "$KAGGLE_KEY" ]; then
+#            echo "Error: Kaggle credentials not provided"
+#            exit 1
+#          fi
+#
+#          # Create Kaggle config
+#          mkdir -p $HOME/.config/kaggle
+#          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > $HOME/.config/kaggle/kaggle.json
+#          chmod 600 $HOME/.config/kaggle/kaggle.json
+#
+#          # Run linting on key files
+#          echo "Linting core config file:"
+#          python -m pylint creditrisk/core/config.py --disable=C,R
+#          echo "Linting preprocessing file:"
+#          python -m pylint creditrisk/data/preproc.py --disable=C,R
+#
+#          # Run preprocessing with retries (includes download)
+#          for i in {1..3}; do
+#            echo "Preprocessing attempt $i..."
+#            echo "Current directory structure:"
+#            tree data/
+#
+#            # Run preprocessing with output capture and debug logging
+#            echo "Python environment:"
+#            echo "PYTHONPATH=$PWD"
+#            echo "PROJ_ROOT=$PWD"
+#            python -c "import sys; print(sys.path)" 2>&1 | tee debug.log
+#
+#            # Debug - print path structure and config
+#            python -c "import os; import sys; from pathlib import Path; print('Current working directory:', os.getcwd()); print('Python paths:', sys.path); print('Environment PROJ_ROOT:', os.environ.get('PROJ_ROOT')); print('Environment PYTHONPATH:', os.environ.get('PYTHONPATH')); print('Listing data directory:'); [print(f'  {p}') for p in Path('data').glob('**/*')]" 2>&1 | tee -a debug.log
+#
+#            # Try running with explicit DATA_DIR environment variable
+#            if PYTHONPATH=$PWD PROJ_ROOT=$PWD DATA_DIR=$PWD/data PROCESSED_DATA_DIR=$PWD/data/processed MODELS_DIR=$PWD/models LOGURU_LEVEL=DEBUG python -m creditrisk.data.preproc 2>&1 | tee preprocess.log; then
+#              echo "Preprocessing script completed using module approach, checking output..."
+#            elif PYTHONPATH=$PWD PROJ_ROOT=$PWD DATA_DIR=$PWD/data PROCESSED_DATA_DIR=$PWD/data/processed MODELS_DIR=$PWD/models LOGURU_LEVEL=DEBUG python creditrisk/data/preproc.py 2>&1 | tee preprocess.log; then
+#              echo "Preprocessing script completed using direct file approach, checking output..."
+#              echo "Preprocessing script completed, checking output..."
+#
+#              if [ ! -f "data/raw/UCI_Credit_Card.csv" ]; then
+#                echo "Error: Raw data file not downloaded"
+#                echo "Current directory structure:"
+#                tree
+#                echo "Debug info:"
+#                cat debug.log
+#                echo "Process log:"
+#                cat preprocess.log
+#                exit 1
+#              fi
+#
+#              if [ -z "$(ls -A data/processed)" ]; then
+#                echo "Error: No processed files generated"
+#                echo "Current directory structure:"
+#                tree data/
+#                echo "Detailed directory listing:"
+#                find . -type f -name "*.csv" | sort
+#                echo "Debug info:"
+#                cat debug.log
+#                echo "Process log:"
+#                cat preprocess.log
+#
+#                # Create a sample processed file as fallback
+#                echo "Creating a fallback processed file for testing"
+#                if [ -f "data/raw/UCI_Credit_Card.csv" ]; then
+#                  # Just copy the raw file as a fallback
+#                  cp "data/raw/UCI_Credit_Card.csv" "data/processed/UCI_Credit_Card_processed.csv"
+#                  echo "Created fallback processed file"
+#                  ls -la data/processed/
+#                else
+#                  echo "Cannot create fallback - raw file does not exist"
+#                  exit 1
+#                fi
+#              fi
+#
+#              echo "Preprocessing completed successfully"
+#              echo "Final directory structure:"
+#              tree data/
+#              exit 0
+#            fi
+#
+#            echo "Attempt $i failed"
+#            echo "Current directory structure:"
+#            tree
+#            echo "Process log:"
+#            cat preprocess.log
+#            echo "Retrying in 5 seconds..."
+#            sleep 5
+#          done
+#
+#          echo "All preprocessing attempts failed"
+#          echo "Final directory structure:"
+#          tree
+#          echo "Final attempt log:"
+#          cat preprocess.log
+#          exit 1
+#
+#      - name: Verify processed data
+#        if: success()
+#        id: verify_preproc
+#        run: |
+#          if [ ! -d "data/processed" ]; then
+#            echo "Error: Processed data directory does not exist"
+#            exit 1
+#          fi
+#
+#          if [ -z "$(ls -A data/processed)" ]; then
+#            echo "Error: Processed data directory is empty"
+#            ls -la data/  # List contents of parent directory for debugging
+#            exit 1
+#          fi
+#
+#          echo "Contents of processed data directory:"
+#          ls -la data/processed/
+#          echo "Processed data verified successfully"
+#
+#      - name: Upload processed data
+#        if: success() && steps.verify_preproc.outcome == 'success'
+#        run: |
+#          echo "Final verification before uploading artifact:"
+#          ls -la data/processed/
+#          find data -type f | grep -v "__pycache__" | sort
+#
+#          # Create a backup copy of the processed data just in case
+#          mkdir -p data/processed_backup
+#          cp -v data/processed/* data/processed_backup/ 2>/dev/null || echo "No files to backup"
+#
+#      - name: Upload processed data artifact
+#        if: success() && steps.verify_preproc.outcome == 'success'
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: processed-data
+#          path: data/processed
+#          retention-days: 1  # Only keep for duration needed
+#
+#      # - name: Notify on preprocessing failure
+#      #   if: failure()
+#      #   uses: actions/github-script@v7
+#      #   with:
+#      #     script: |
+#      #       github.rest.issues.create({
+#      #         owner: context.repo.owner,
+#      #         repo: context.repo.repo,
+#      #         title: 'Preprocessing failed in retraining workflow',
+#      #         body: `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+#      #       })
+#
+#  train:
+#    needs: preprocess
+#    runs-on: ubuntu-latest
+#    timeout-minutes: 60
+#    permissions:
+#      contents: write
+#      pull-requests: write
+#      issues: write
+#      actions: write
+#
+#    steps:
+#      - name: Checkout repository
+#        uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Download processed data
+#        id: download
+#        continue-on-error: true
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: processed-data
+#          path: data/processed
+#
+#      - name: Verify download
+#        run: |
+#          echo "Checking downloaded artifact:"
+#          if [ -d "data/processed" ]; then
+#            echo "Processed directory exists"
+#            find data/processed -type f | sort
+#            ls -la data/processed/
+#          else
+#            echo "Error: Processed directory not found after download"
+#            mkdir -p data/processed
+#          fi
+#
+#      - name: Verify processed data
+#        id: verify
+#        run: |
+#          echo "Checking processed data directory..."
+#          if [ ! -d "data/processed" ]; then
+#            echo "Error: Processed data directory does not exist"
+#            echo "Current directory structure:"
+#            tree data/
+#            exit 1
+#          fi
+#
+#          if [ -z "$(ls -A data/processed)" ]; then
+#            echo "Error: Processed data directory is empty"
+#            echo "Current directory structure:"
+#            tree data/
+#            echo "Detailed directory listing:"
+#            find . -type f -name "*.csv" | sort
+#            exit 1
+#          fi
+#
+#          echo "Contents of processed data directory:"
+#          ls -la data/processed/
+#          echo "Processed data verified successfully"
+#
+#      - name: Fail if data verification failed
+#        if: failure()
+#        run: exit 1
+#
+#      - name: Set up Python
+#        uses: actions/setup-python@v4
+#        with:
+#          python-version: "3.11"
+#          cache: 'pip'
+#
+#      - name: Install dependencies
+#        run: |
+#          python -m pip install -U pip uv
+#          uv venv
+#          source .venv/bin/activate
+#          uv pip install -e .
+#          uv pip install python-dotenv  # Ensure correct dotenv package
+#
+#      - name: Setup environment
+#        run: |
+#          # Install tree command
+#          sudo apt-get update
+#          sudo apt-get install -y tree
+#
+#          # Create all required directories
+#          mkdir -p data/raw
+#          mkdir -p data/processed
+#          mkdir -p data/interim
+#          mkdir -p data/external
+#          mkdir -p models
+#          mkdir -p reports/figures
+#          mkdir -p .mlflow/db
+#          mkdir -p .mlflow/artifacts
+#
+#          # Show initial directory structure
+#          echo "Initial directory structure:"
+#          tree
+#
+#      - name: Run training
+#        id: train
+#        continue-on-error: true
+#        run: |
+#          source .venv/bin/activate
+#
+#          for i in {1..3}; do
+#            echo "Training attempt $i..."
+#            echo "Current directory structure:"
+#            tree
+#
+#            # Show Python environment
+#            echo "Python environment:"
+#            echo "PYTHONPATH=$PWD"
+#            echo "PROJ_ROOT=$PWD"
+#            python -c "import sys; print(sys.path)" 2>&1 | tee debug.log
+#
+#            # Print detailed debug info
+#            python -c "import os; import sys; from pathlib import Path; print('Current working directory:', os.getcwd()); print('Python paths:', sys.path); print('Environment PROJ_ROOT:', os.environ.get('PROJ_ROOT')); print('Environment PYTHONPATH:', os.environ.get('PYTHONPATH')); print('Listing data directory:'); [print(f'  {p}') for p in Path('data').glob('**/*')]" 2>&1 | tee -a debug.log
+#
+#            # Run training with output capture and explicit directory paths
+#            if PYTHONPATH=$PWD PROJ_ROOT=$PWD DATA_DIR=$PWD/data PROCESSED_DATA_DIR=$PWD/data/processed MODELS_DIR=$PWD/models MODEL_NAME=credit-default-classifier LOGURU_LEVEL=DEBUG python -m creditrisk.models.train 2>&1 | tee train.log; then
+#              echo "Training completed successfully"
+#              echo "Final directory structure:"
+#              tree
+#              exit 0
+#            fi
+#
+#            echo "Attempt $i failed"
+#            echo "Current directory structure:"
+#            tree
+#            echo "Training log:"
+#            cat train.log
+#            echo "Retrying in 5 seconds..."
+#            sleep 5
+#          done
+#
+#          echo "All training attempts failed"
+#          echo "Final directory structure:"
+#          tree
+#          echo "Final attempt log:"
+#          cat train.log
+#          exit 1
+#
+#      - name: Create MLflow meta files and copy artifacts
+#        if: success() || failure()
+#        run: |
+#          source .venv/bin/activate
+#
+#          # Prepare variables
+#          CURR_DIR=$(pwd)
+#          TIMESTAMP=$(date +%s%3N)
+#
+#          # Create experiment meta.yaml files
+#          mkdir -p mlruns/2
+#          if [ ! -f "mlruns/2/meta.yaml" ]; then
+#            echo "Creating experiment meta.yaml for experiment ID 2"
+#            {
+#              echo "artifact_location: file:///$CURR_DIR/mlruns/2"
+#              echo "creation_time: $TIMESTAMP"
+#              echo "experiment_id: '2'"
+#              echo "last_update_time: $TIMESTAMP"
+#              echo "lifecycle_stage: active"
+#              echo "name: Credit Default Experiment 2"
+#            } > mlruns/2/meta.yaml
+#          fi
+#
+#          mkdir -p mlruns/4
+#          if [ ! -f "mlruns/4/meta.yaml" ]; then
+#            echo "Creating experiment meta.yaml for experiment ID 4"
+#            {
+#              echo "artifact_location: file:///$CURR_DIR/mlruns/4"
+#              echo "creation_time: $TIMESTAMP"
+#              echo "experiment_id: '4'"
+#              echo "last_update_time: $TIMESTAMP"
+#              echo "lifecycle_stage: active"
+#              echo "name: Credit Default Experiment 4"
+#            } > mlruns/4/meta.yaml
+#          fi
+#
+#          # Create meta.yaml files for all run directories
+#          for run_dir in mlruns/*/*/; do
+#            if [[ $run_dir != *meta.yaml* ]] && [[ $run_dir != */*/ ]]; then
+#              continue
+#            fi
+#
+#            run_id=$(basename "$run_dir")
+#            exp_id=$(basename "$(dirname "$run_dir")")
+#
+#            if [ ! -f "${run_dir}meta.yaml" ]; then
+#              echo "Creating run meta.yaml in ${run_dir}"
+#              {
+#                echo "artifact_uri: file:///$CURR_DIR/${run_dir}artifacts"
+#                echo "end_time: $TIMESTAMP"
+#                echo "entry_point_name: ''"
+#                echo "experiment_id: '$exp_id'"
+#                echo "lifecycle_stage: active"
+#                echo "run_id: $run_id"
+#                echo "run_name: Credit Default Prediction Run"
+#                echo "run_uuid: $run_id"
+#                echo "source_name: ''"
+#                echo "source_type: 4"
+#                echo "source_version: ''"
+#                echo "start_time: $TIMESTAMP"
+#                echo "status: 3"
+#                echo "user_id: ''"
+#              } > "${run_dir}meta.yaml"
+#
+#              # Create artifacts directory if it doesn't exist
+#              mkdir -p "${run_dir}artifacts"
+#
+#              # Copy all figures from reports/figures to the run's artifacts directory
+#              if [ -d "reports/figures" ]; then
+#                echo "Copying figures to ${run_dir}artifacts/"
+#                cp -v reports/figures/*.png "${run_dir}artifacts/" 2>/dev/null || echo "No figures to copy"
+#              fi
+#
+#              # Create metrics.json with model statistics if it doesn't exist
+#              if [ ! -f "${run_dir}metrics.json" ] && [ -f "models/cv_results.csv" ]; then
+#                echo "Creating metrics.json for ${run_dir}"
+#
+#                # Get some values from CV results if possible
+#                if [ -f "models/cv_results.csv" ]; then
+#                  F1_MEAN=$(awk -F, 'NR>1 {sum+=$2} END {print sum/(NR-1)}' models/cv_results.csv 2>/dev/null || echo "0.75")
+#                else
+#                  F1_MEAN="0.75"
+#                fi
+#
+#                # Create metrics.json using a command
+#                python3 -c "import json; f=open('${run_dir}metrics.json', 'w'); json.dump([{'key': 'f1_cv_mean', 'value': ${F1_MEAN}, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'precision', 'value': 0.82, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'recall', 'value': 0.75, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'pr_auc', 'value': 0.80, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'approval_rate', 'value': 0.85, 'timestamp': ${TIMESTAMP}, 'step': 0}], f, indent=2); f.close()"
+#                echo "Created metrics.json for ${run_dir}"
+#              fi
+#            fi
+#          done
+#
+#          echo "MLflow meta files and artifacts created"
+#          find mlruns -name "meta.yaml"
+#
+#          echo "Artifacts copied:"
+#          find mlruns -path "*/artifacts/*" -type f | sort
+#
+#      - name: Update ML artifacts
+#        if: success() && steps.train.outcome == 'success'
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+#        run: |
+#          # First, disable branch protection
+#          echo "Disabling branch protection..."
+#          curl -L \
+#            -X DELETE \
+#            -H "Accept: application/vnd.github+json" \
+#            -H "Authorization: Bearer $GITHUB_TOKEN" \
+#            -H "X-GitHub-Api-Version: 2022-11-28" \
+#            https://api.github.com/repos/${{ github.repository }}/branches/main/protection
+#
+#          # Configure git
+#          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+#          git config --local user.name "github-actions[bot]"
+#
+#          # Push directly to main
+#          git add .mlflow/artifacts/
+#          git add .mlflow/db/
+#          git add models/
+#          git add reports/figures/
+#          git add data/processed/
+#          git add mlruns/
+#
+#          if ! git diff --cached --quiet; then
+#            git commit -m "Update ML artifacts [skip ci]"
+#            git push origin main
+#          else
+#            echo "No changes to commit"
+#          fi
+#
+#          # Restore branch protection
+#          echo "Restoring branch protection..."
+#          curl -L \
+#            -X PUT \
+#            -H "Accept: application/vnd.github+json" \
+#            -H "Authorization: Bearer $GITHUB_TOKEN" \
+#            -H "X-GitHub-Api-Version: 2022-11-28" \
+#            https://api.github.com/repos/${{ github.repository }}/branches/main/protection \
+#            -d '{
+#              "required_status_checks": null,
+#              "enforce_admins": false,
+#              "required_pull_request_reviews": {
+#                "required_approving_review_count": 1
+#              },
+#              "restrictions": null,
+#              "required_linear_history": false,
+#              "allow_force_pushes": false,
+#              "allow_deletions": false
+#            }'
+#
+#      - name: Trigger Predict Workflow
+#        if: success()
+#        uses: peter-evans/repository-dispatch@v2
+#        with:
+#          token: ${{ secrets.WORKFLOW_PAT }}  # Use a personal access token
+#          event-type: trigger-predict
+#
+#      # - name: Notify on training failure
+#      #   if: failure()
+#      #   uses: actions/github-script@v7
+#      #   with:
+#      #     script: |
+#      #       github.rest.issues.create({
+#      #         owner: context.repo.owner,
+#      #         repo: context.repo.repo,
+#      #         title: 'Training failed in retraining workflow',
+#      #         body: `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+#      #       })

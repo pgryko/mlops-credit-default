@@ -1,215 +1,215 @@
-name: Predict on new data or with new model
-
-on:
-  repository_dispatch:
-    types: [trigger-predict]
-  push:
-    branches:
-      - main
-    paths:
-      - '.mlflow/artifacts/**'
-      - '.mlflow/db/**'
-      - 'creditrisk/models/predict.py'
-      - 'creditrisk/models/resolve.py'
-      - '.github/workflows/predict_on_model_change.yml'
-  workflow_dispatch:
-
-jobs:
-  predict:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          
-      - name: Install dependencies
-        run: |
-          python -m pip install -U pip uv
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e .
-          
-      - name: Download, preprocess data and create test set
-        env:
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-        run: |
-          source .venv/bin/activate
-          mkdir -p $HOME/.config/kaggle
-          echo "$KAGGLE_KEY" > $HOME/.config/kaggle/kaggle.json
-          chmod 600 $HOME/.config/kaggle/kaggle.json
-          make preprocess
-
-          # Create test dataset for prediction (if not exists)
-          if [ ! -f "data/processed/test.csv" ]; then
-            echo "Creating test dataset from training data..."
-            chmod +x .github/scripts/create_test_data.py
-            python .github/scripts/create_test_data.py
-          else
-            echo "Test dataset already exists at data/processed/test.csv"
-          fi
-
-          # Verify test dataset
-          if [ -f "data/processed/test.csv" ]; then
-            echo "Test dataset info:"
-            wc -l data/processed/test.csv
-            head -n 1 data/processed/test.csv
-          else
-            echo "Error: Test dataset could not be created"
-            exit 1
-          fi
-        
-      - name: Setup MLflow
-        run: |
-          mkdir -p .mlflow/db
-          mkdir -p .mlflow/artifacts
-          
-      - name: Set MLflow tracking URI
-        run: |
-          source .venv/bin/activate
-          echo "MLFLOW_TRACKING_URI=sqlite:///.mlflow/db/mlflow.db" >> $GITHUB_ENV
-          echo "MLFLOW_ARTIFACT_ROOT=./.mlflow/artifacts" >> $GITHUB_ENV
-        
-      - name: Create MLflow meta files and copy artifacts
-        run: |
-          source .venv/bin/activate
-
-          # Prepare variables
-          CURR_DIR=$(pwd)
-          TIMESTAMP=$(date +%s%3N)
-
-          # Create experiment meta.yaml files
-          mkdir -p mlruns/2
-          if [ ! -f "mlruns/2/meta.yaml" ]; then
-            echo "Creating experiment meta.yaml for experiment ID 2"
-            {
-              echo "artifact_location: file:///$CURR_DIR/mlruns/2"
-              echo "creation_time: $TIMESTAMP"
-              echo "experiment_id: '2'"
-              echo "last_update_time: $TIMESTAMP"
-              echo "lifecycle_stage: active"
-              echo "name: Credit Default Experiment 2"
-            } > mlruns/2/meta.yaml
-          fi
-
-          mkdir -p mlruns/4
-          if [ ! -f "mlruns/4/meta.yaml" ]; then
-            echo "Creating experiment meta.yaml for experiment ID 4"
-            {
-              echo "artifact_location: file:///$CURR_DIR/mlruns/4"
-              echo "creation_time: $TIMESTAMP"
-              echo "experiment_id: '4'"
-              echo "last_update_time: $TIMESTAMP"
-              echo "lifecycle_stage: active"
-              echo "name: Credit Default Experiment 4"
-            } > mlruns/4/meta.yaml
-          fi
-
-          # Create meta.yaml files for all run directories
-          for run_dir in mlruns/*/*/; do
-            if [[ "$run_dir" == *"meta.yaml"* ]] || [[ "$run_dir" != *"/"*"/"*"/"* ]]; then
-              continue
-            fi
-
-            run_id=$(basename "$run_dir")
-            exp_id=$(basename "$(dirname "$run_dir")")
-
-            if [ ! -f "${run_dir}meta.yaml" ]; then
-              echo "Creating run meta.yaml in ${run_dir}"
-              {
-                echo "artifact_uri: file:///$CURR_DIR/${run_dir}artifacts"
-                echo "end_time: $TIMESTAMP"
-                echo "entry_point_name: ''"
-                echo "experiment_id: '$exp_id'"
-                echo "lifecycle_stage: active"
-                echo "run_id: $run_id"
-                echo "run_name: Credit Default Prediction Run"
-                echo "run_uuid: $run_id"
-                echo "source_name: ''"
-                echo "source_type: 4"
-                echo "source_version: ''"
-                echo "start_time: $TIMESTAMP"
-                echo "status: 3"
-                echo "user_id: ''"
-              } > "${run_dir}meta.yaml"
-            fi
-
-            # Create artifacts directory if it doesn't exist
-            mkdir -p "${run_dir}artifacts"
-
-            # Copy all figures from reports/figures to the run's artifacts directory
-            if [ -d "reports/figures" ]; then
-              echo "Copying figures to ${run_dir}artifacts/"
-              cp -v reports/figures/*.png "${run_dir}artifacts/" 2>/dev/null || echo "No figures to copy"
-            fi
-
-            # Create metrics.json with model statistics if it doesn't exist
-            if [ ! -f "${run_dir}metrics.json" ] && [ -f "models/cv_results.csv" ]; then
-              echo "Creating metrics.json for ${run_dir}"
-
-              # Get some values from CV results if possible
-              if [ -f "models/cv_results.csv" ]; then
-                F1_MEAN=$(awk -F, 'NR>1 {sum+=$2} END {print sum/(NR-1)}' models/cv_results.csv 2>/dev/null || echo "0.75")
-              else
-                F1_MEAN="0.75"
-              fi
-
-              # Create metrics.json using a command
-              python3 -c "import json; f=open('${run_dir}metrics.json', 'w'); json.dump([{'key': 'f1_cv_mean', 'value': ${F1_MEAN}, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'precision', 'value': 0.82, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'recall', 'value': 0.75, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'pr_auc', 'value': 0.80, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'approval_rate', 'value': 0.85, 'timestamp': ${TIMESTAMP}, 'step': 0}], f, indent=2); f.close()"
-              echo "Created metrics.json for ${run_dir}"
-            fi
-          done
-
-          echo "MLflow meta files and artifacts created"
-          find mlruns -name "meta.yaml"
-
-          echo "Artifacts copied:"
-          find mlruns -path "*/artifacts/*" -type f | sort
-          
-      - name: Resolve and predict
-        run: |
-          source .venv/bin/activate
-
-          # For debugging
-          echo "Checking MLflow connection..."
-          mlflow --version
-          mlflow experiments search
-
-          # Verify test dataset exists before resolving
-          if [ ! -f "data/processed/test.csv" ]; then
-            echo "Error: Test dataset not found. Cannot proceed with predictions."
-            exit 1
-          fi
-
-          echo "Running model resolution..."
-          make resolve || {
-            echo "Resolve failed but continuing..."
-            exit_code=$?
-            if [ $exit_code -ne 0 ]; then
-              echo "No existing model found, skipping resolve"
-            fi
-          }
-
-          echo "Running predictions..."
-          make predict || {
-            echo "No models available for prediction. This is expected for first run."
-            exit 0  # Changed from 1 to 0 to not fail the workflow
-          }
-
-          # Check if predictions were created
-          if [ -f "models/preds.csv" ]; then
-            echo "Prediction results:"
-            head -n 5 models/preds.csv
-            echo "Total predictions: $(wc -l < models/preds.csv)"
-          else
-            echo "No prediction output file was created."
-          fi
-          
-      - name: Upload predictions
-        if: success() && hashFiles('models/preds.csv') != ''  # Only upload if predictions exist
-        uses: actions/upload-artifact@v4
-        with:
-          name: predictions
-          path: models/preds.csv
+#name: Predict on new data or with new model
+#
+#on:
+#  repository_dispatch:
+#    types: [trigger-predict]
+#  push:
+#    branches:
+#      - main
+#    paths:
+#      - '.mlflow/artifacts/**'
+#      - '.mlflow/db/**'
+#      - 'creditrisk/models/predict.py'
+#      - 'creditrisk/models/resolve.py'
+#      - '.github/workflows/predict_on_model_change.yml'
+#  workflow_dispatch:
+#
+#jobs:
+#  predict:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Set up Python
+#        uses: actions/setup-python@v4
+#        with:
+#          python-version: '3.11'
+#
+#      - name: Install dependencies
+#        run: |
+#          python -m pip install -U pip uv
+#          uv venv
+#          source .venv/bin/activate
+#          uv pip install -e .
+#
+#      - name: Download, preprocess data and create test set
+#        env:
+#          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+#        run: |
+#          source .venv/bin/activate
+#          mkdir -p $HOME/.config/kaggle
+#          echo "$KAGGLE_KEY" > $HOME/.config/kaggle/kaggle.json
+#          chmod 600 $HOME/.config/kaggle/kaggle.json
+#          make preprocess
+#
+#          # Create test dataset for prediction (if not exists)
+#          if [ ! -f "data/processed/test.csv" ]; then
+#            echo "Creating test dataset from training data..."
+#            chmod +x .github/scripts/create_test_data.py
+#            python .github/scripts/create_test_data.py
+#          else
+#            echo "Test dataset already exists at data/processed/test.csv"
+#          fi
+#
+#          # Verify test dataset
+#          if [ -f "data/processed/test.csv" ]; then
+#            echo "Test dataset info:"
+#            wc -l data/processed/test.csv
+#            head -n 1 data/processed/test.csv
+#          else
+#            echo "Error: Test dataset could not be created"
+#            exit 1
+#          fi
+#
+#      - name: Setup MLflow
+#        run: |
+#          mkdir -p .mlflow/db
+#          mkdir -p .mlflow/artifacts
+#
+#      - name: Set MLflow tracking URI
+#        run: |
+#          source .venv/bin/activate
+#          echo "MLFLOW_TRACKING_URI=sqlite:///.mlflow/db/mlflow.db" >> $GITHUB_ENV
+#          echo "MLFLOW_ARTIFACT_ROOT=./.mlflow/artifacts" >> $GITHUB_ENV
+#
+#      - name: Create MLflow meta files and copy artifacts
+#        run: |
+#          source .venv/bin/activate
+#
+#          # Prepare variables
+#          CURR_DIR=$(pwd)
+#          TIMESTAMP=$(date +%s%3N)
+#
+#          # Create experiment meta.yaml files
+#          mkdir -p mlruns/2
+#          if [ ! -f "mlruns/2/meta.yaml" ]; then
+#            echo "Creating experiment meta.yaml for experiment ID 2"
+#            {
+#              echo "artifact_location: file:///$CURR_DIR/mlruns/2"
+#              echo "creation_time: $TIMESTAMP"
+#              echo "experiment_id: '2'"
+#              echo "last_update_time: $TIMESTAMP"
+#              echo "lifecycle_stage: active"
+#              echo "name: Credit Default Experiment 2"
+#            } > mlruns/2/meta.yaml
+#          fi
+#
+#          mkdir -p mlruns/4
+#          if [ ! -f "mlruns/4/meta.yaml" ]; then
+#            echo "Creating experiment meta.yaml for experiment ID 4"
+#            {
+#              echo "artifact_location: file:///$CURR_DIR/mlruns/4"
+#              echo "creation_time: $TIMESTAMP"
+#              echo "experiment_id: '4'"
+#              echo "last_update_time: $TIMESTAMP"
+#              echo "lifecycle_stage: active"
+#              echo "name: Credit Default Experiment 4"
+#            } > mlruns/4/meta.yaml
+#          fi
+#
+#          # Create meta.yaml files for all run directories
+#          for run_dir in mlruns/*/*/; do
+#            if [[ "$run_dir" == *"meta.yaml"* ]] || [[ "$run_dir" != *"/"*"/"*"/"* ]]; then
+#              continue
+#            fi
+#
+#            run_id=$(basename "$run_dir")
+#            exp_id=$(basename "$(dirname "$run_dir")")
+#
+#            if [ ! -f "${run_dir}meta.yaml" ]; then
+#              echo "Creating run meta.yaml in ${run_dir}"
+#              {
+#                echo "artifact_uri: file:///$CURR_DIR/${run_dir}artifacts"
+#                echo "end_time: $TIMESTAMP"
+#                echo "entry_point_name: ''"
+#                echo "experiment_id: '$exp_id'"
+#                echo "lifecycle_stage: active"
+#                echo "run_id: $run_id"
+#                echo "run_name: Credit Default Prediction Run"
+#                echo "run_uuid: $run_id"
+#                echo "source_name: ''"
+#                echo "source_type: 4"
+#                echo "source_version: ''"
+#                echo "start_time: $TIMESTAMP"
+#                echo "status: 3"
+#                echo "user_id: ''"
+#              } > "${run_dir}meta.yaml"
+#            fi
+#
+#            # Create artifacts directory if it doesn't exist
+#            mkdir -p "${run_dir}artifacts"
+#
+#            # Copy all figures from reports/figures to the run's artifacts directory
+#            if [ -d "reports/figures" ]; then
+#              echo "Copying figures to ${run_dir}artifacts/"
+#              cp -v reports/figures/*.png "${run_dir}artifacts/" 2>/dev/null || echo "No figures to copy"
+#            fi
+#
+#            # Create metrics.json with model statistics if it doesn't exist
+#            if [ ! -f "${run_dir}metrics.json" ] && [ -f "models/cv_results.csv" ]; then
+#              echo "Creating metrics.json for ${run_dir}"
+#
+#              # Get some values from CV results if possible
+#              if [ -f "models/cv_results.csv" ]; then
+#                F1_MEAN=$(awk -F, 'NR>1 {sum+=$2} END {print sum/(NR-1)}' models/cv_results.csv 2>/dev/null || echo "0.75")
+#              else
+#                F1_MEAN="0.75"
+#              fi
+#
+#              # Create metrics.json using a command
+#              python3 -c "import json; f=open('${run_dir}metrics.json', 'w'); json.dump([{'key': 'f1_cv_mean', 'value': ${F1_MEAN}, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'precision', 'value': 0.82, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'recall', 'value': 0.75, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'pr_auc', 'value': 0.80, 'timestamp': ${TIMESTAMP}, 'step': 0}, {'key': 'approval_rate', 'value': 0.85, 'timestamp': ${TIMESTAMP}, 'step': 0}], f, indent=2); f.close()"
+#              echo "Created metrics.json for ${run_dir}"
+#            fi
+#          done
+#
+#          echo "MLflow meta files and artifacts created"
+#          find mlruns -name "meta.yaml"
+#
+#          echo "Artifacts copied:"
+#          find mlruns -path "*/artifacts/*" -type f | sort
+#
+#      - name: Resolve and predict
+#        run: |
+#          source .venv/bin/activate
+#
+#          # For debugging
+#          echo "Checking MLflow connection..."
+#          mlflow --version
+#          mlflow experiments search
+#
+#          # Verify test dataset exists before resolving
+#          if [ ! -f "data/processed/test.csv" ]; then
+#            echo "Error: Test dataset not found. Cannot proceed with predictions."
+#            exit 1
+#          fi
+#
+#          echo "Running model resolution..."
+#          make resolve || {
+#            echo "Resolve failed but continuing..."
+#            exit_code=$?
+#            if [ $exit_code -ne 0 ]; then
+#              echo "No existing model found, skipping resolve"
+#            fi
+#          }
+#
+#          echo "Running predictions..."
+#          make predict || {
+#            echo "No models available for prediction. This is expected for first run."
+#            exit 0  # Changed from 1 to 0 to not fail the workflow
+#          }
+#
+#          # Check if predictions were created
+#          if [ -f "models/preds.csv" ]; then
+#            echo "Prediction results:"
+#            head -n 5 models/preds.csv
+#            echo "Total predictions: $(wc -l < models/preds.csv)"
+#          else
+#            echo "No prediction output file was created."
+#          fi
+#
+#      - name: Upload predictions
+#        if: success() && hashFiles('models/preds.csv') != ''  # Only upload if predictions exist
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: predictions
+#          path: models/preds.csv
