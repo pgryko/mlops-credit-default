@@ -561,10 +561,10 @@ def get_or_create_experiment(experiment_name: str) -> str:
         if not is_correctly_relative:
             # Check for known problematic absolute path patterns
             is_abs_ci_path = current_artifact_location_str.startswith(
-                "/home/runner/work/"
+                "/home/runner/work/",
             ) or current_artifact_location_str.startswith("file:///home/runner/work/")
             is_abs_local_home_a_path = current_artifact_location_str.startswith(
-                "/home/a/"
+                "/home/a/",
             ) or current_artifact_location_str.startswith("file:///home/a/")
             # Add other known absolute path prefixes if necessary
 

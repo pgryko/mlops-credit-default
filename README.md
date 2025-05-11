@@ -14,10 +14,88 @@ This project implements an end-to-end MLOps pipeline for credit card default pre
 
 ## Architecture
 
+The system implements a complete MLOps architecture with automated pipelines for data processing, model training, and predictions. This design ensures reproducibility, scalability, and production-readiness.
+
+### System Components
+
+```
+┌─────────────────┐     ┌───────────────────┐     ┌──────────────────┐
+│   Data Pipeline │     │ Training Pipeline  │     │ Prediction       │
+│   ────────────  │     │ ────────────────  │     │ Pipeline         │
+│                 │     │                   │     │ ────────────────  │
+│  ┌─────────┐    │     │  ┌─────────────┐  │     │  ┌────────────┐  │
+│  │ Kaggle  │    │     │  │ Parameter   │  │     │  │ Model      │  │
+│  │ Dataset │───┐│     │  │ Optimization│  │     │  │ Resolution │  │
+│  └─────────┘   ││     │  └──────┬──────┘  │     │  └─────┬──────┘  │
+│                ││     │         │         │     │        │         │
+│  ┌─────────┐   ││     │  ┌──────▼──────┐  │     │  ┌─────▼──────┐  │
+│  │ Validate │◄──┘│     │  │ Cross-     │  │     │  │ Prediction │  │
+│  │ Data     │    │     │  │ Validation │  │     │  │ Generation │  │
+│  └─────┬───┘    │     │  └──────┬──────┘  │     │  └─────┬──────┘  │
+│        │        │     │         │         │     │        │         │
+│  ┌─────▼─────┐  │     │  ┌──────▼──────┐  │     │  ┌─────▼──────┐  │
+│  │ Preprocess│  │     │  │ Model       │  │     │  │ Feature    │  │
+│  │ Features  │  │     │  │ Training    │  │     │  │ Importance │  │
+│  └─────┬─────┘  │     │  └──────┬──────┘  │     │  └─────┬──────┘  │
+│        │        │     │         │         │     │        │         │
+│  ┌─────▼─────┐  │     │  ┌──────▼──────┐  │     │  ┌─────▼──────┐  │
+│  │ Processed │  │     │  │ SHAP        │  │     │  │ Default    │  │
+│  │ Dataset   │──┼─────┼─►│ Explanations│  │     │  │ Probability│  │
+│  └───────────┘  │     │  └──────┬──────┘  │     │  └─────┬──────┘  │
+└─────────────────┘     │         │         │     │        │         │
+                        │  ┌──────▼──────┐  │     │  ┌─────▼──────┐  │
+┌──────────────────┐    │  │ MLflow      │  │     │  │ Prediction │  │
+│ Visualization    │    │  │ Logging     │◄─┼─────┼──┤ Explanations  │
+│ ───────────────  │    │  └─────────────┘  │     │  └────────────┘  │
+│  ┌────────────┐  │    └───────────────────┘     └──────────────────┘
+│  │ Performance│◄─┼──────────────────────────┐
+│  │ Charts     │  │                          │
+│  └────────────┘  │    ┌───────────────────┐ │
+│                  │    │ CI/CD Automation  │ │
+│  ┌────────────┐  │    │ ────────────────  │ │
+│  │ Feature    │◄─┼────┤                   │ │
+│  │ Importance │  │    │  ┌─────────────┐  │ │
+│  └────────────┘  │    │  │ Github      │  │ │
+│                  │    │  │ Actions     │──┼─┘
+│  ┌────────────┐  │    │  └─────────────┘  │
+│  │ SHAP       │◄─┼────┤                   │
+│  │ Plots      │  │    │  ┌─────────────┐  │
+│  └────────────┘  │    │  │ Automatic   │  │
+└──────────────────┘    │  │ Retraining  │  │
+                        │  └─────────────┘  │
+                        └───────────────────┘
+```
+
+### Key Components
+
 The system consists of three main pipelines:
-1. **Data Pipeline**: Validates and preprocesses credit card data with domain-specific checks
-2. **Training Pipeline**: Automatically retrains the model with cost-sensitive optimization
-3. **Prediction Pipeline**: Generates probability-based default predictions with explanations
+
+1. **Data Pipeline**:
+   - Validates and preprocesses credit card data with domain-specific checks
+   - Handles missing values and outliers with appropriate business rules
+   - Performs feature engineering tailored to financial default prediction
+   - Integrates with Kaggle API for automated dataset retrieval
+
+2. **Training Pipeline**:
+   - Automatically retrains the model with cost-sensitive optimization
+   - Implements hyperparameter optimization using Optuna
+   - Performs rigorous cross-validation with stratification
+   - Generates SHAP explanations for model interpretability
+   - Logs all training metrics and artifacts to MLflow
+
+3. **Prediction Pipeline**:
+   - Generates probability-based default predictions with explanations
+   - Resolves the champion model from MLflow registry
+   - Provides detailed SHAP-based explanations for each prediction
+   - Calculates business-specific metrics (approval rate, cost per decision)
+   - Optimizes probability threshold based on custom cost matrix
+
+4. **MLOps Infrastructure**:
+   - Automated CI/CD with GitHub Actions
+   - Integrated experiment tracking with MLflow
+   - Automated visualization generation
+   - Model versioning and champion/challenger approach
+   - Comprehensive documentation and model cards
 
 ## Project Structure
 ```
@@ -164,7 +242,7 @@ python -m creditrisk.models.predict --explain customer_data.json
 
 ## CI/CD and Automated Workflows
 
-This project implements continuous integration and continuous delivery through GitHub Actions workflows that automate key MLOps processes.
+This project implements comprehensive continuous integration and continuous delivery through GitHub Actions workflows that automate the entire MLOps pipeline.
 
 ### Automated Model Retraining
 
@@ -172,40 +250,110 @@ The system automatically retrains the model whenever relevant changes are detect
 
 #### Workflow Triggers
 - Push to main branch affecting:
-  - Data files (`data/raw/train.csv`, `data/processed/train.csv`)
+  - Data files (`data/raw/UCI_Credit_Card.csv`, `data/processed/train.csv`)
   - Python code in the `creditrisk` package
   - Model hyperparameter files (`models/best_params.pkl`)
   - Workflow file itself
 - Manual trigger via GitHub Actions UI
 
 #### Required Secrets
-- `KAGGLE_KEY`: Your Kaggle API credentials in JSON format (see Setup section)
+- `KAGGLE_USERNAME`: Your Kaggle username
+- `KAGGLE_KEY`: Your Kaggle API key
 - `WORKFLOW_PAT`: GitHub Personal Access Token with repo permissions (see Setup section)
 
 #### Workflow Steps
 1. **Preprocessing Job**:
-   - Sets up Python environment
-   - Configures Kaggle authentication
-   - Runs data preprocessing with automatic retries
-   - Uploads processed data as artifact
-   - Creates an issue if preprocessing fails
+   - Sets up Python environment with UV package manager
+   - Configures Kaggle authentication for dataset access
+   - Creates necessary directory structure for artifacts
+   - Runs linting on key files with pylint
+   - Runs data preprocessing with automatic retries (3 attempts)
+   - Implements comprehensive error handling and debugging
+   - Verifies processed data exists and uploads as artifact
+   - Provides detailed logging for troubleshooting
 
 2. **Training Job**:
-   - Downloads processed data artifact
-   - Sets up Python and MLflow
-   - Runs model training with automatic retries
+   - Downloads processed data artifact from previous job
+   - Sets up Python and MLflow environment
+   - Creates and configures MLflow directories with correct permissions
+   - Runs full training pipeline with automatic retries:
+     - Hyperparameter optimization with Optuna
+     - Cross-validation training
+     - Final model training with SHAP explanations
    - Temporarily disables branch protection using the PAT
    - Commits and pushes model artifacts, MLflow data, and reports
    - Restores branch protection rules
-   - Triggers prediction workflow
-   - Creates an issue if training fails
+   - Triggers downstream prediction workflow via repository dispatch
+   - Implements detailed logging and error handling
+
+### Automated Prediction Pipeline
+
+The `predict_on_model_change.yml` workflow automatically runs predictions when a new model is registered:
+
+#### Workflow Triggers
+- Repository dispatch from training workflow
+- Push to main branch affecting:
+  - MLflow artifacts and database
+  - Prediction or model resolution code
+  - Workflow file itself
+- Manual trigger via GitHub Actions UI
+
+#### Workflow Steps
+1. **Environment Setup**:
+   - Configures Python environment with dependencies
+   - Sets up Kaggle authentication
+   - Prepares test dataset for prediction
+
+2. **MLflow Configuration**:
+   - Creates and configures MLflow directories
+   - Sets tracking URI and artifact root
+   - Verifies connection to MLflow registry
+
+3. **Model Resolution and Prediction**:
+   - Resolves the "champion" model from MLflow registry
+   - Runs predictions on test dataset
+   - Generates SHAP explanations for predictions
+   - Creates visualization artifacts
+   - Uploads prediction results as artifacts
+
+### MLflow Artifact Management
+
+The `fix_mlflow_artifacts.yml` workflow provides a maintenance utility for MLflow artifact handling:
+
+#### Workflow Purpose
+- Manual workflow to fix or update MLflow artifacts
+- Ensures visualization artifacts are correctly linked to MLflow runs
+- Creates or updates metrics.json files for MLflow tracking
+
+#### Workflow Steps
+1. **Artifact Management**:
+   - Copies visualizations from reports directory to MLflow artifacts
+   - Creates or updates metrics.json with key model statistics
+   - Commits changes to maintain version control of artifacts
 
 ### Setting Up Required Secrets
 
-For the workflow to function properly, you must add the following secrets to your GitHub repository:
+For the workflows to function properly, you must add the following secrets to your GitHub repository:
 
-1. **KAGGLE_KEY**: The entire contents of your `kaggle.json` file
-2. **WORKFLOW_PAT**: A GitHub Personal Access Token with `repo` scope
+1. **KAGGLE_USERNAME**: Your Kaggle username
+2. **KAGGLE_KEY**: Your Kaggle API key
+3. **WORKFLOW_PAT**: A GitHub Personal Access Token with `repo` scope
+
+#### Creating and Setting Up Secrets
+
+1. **Add secrets in GitHub**:
+   - Go to your repository → "Settings" → "Secrets and variables" → "Actions"
+   - Click "New repository secret"
+   - Add each secret with its name and value
+   - Click "Add secret"
+
+2. **Kaggle credentials format**:
+   - The KAGGLE_KEY should be your API key from your Kaggle account
+
+3. **GitHub PAT permissions**:
+   - For WORKFLOW_PAT, ensure it has the following permissions:
+     - `repo` (Full control of private repositories)
+     - `workflow` (Update GitHub Action workflows)
 
 See the Setup section above for detailed instructions on creating these secrets.
 
