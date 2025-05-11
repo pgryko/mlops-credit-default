@@ -5,7 +5,7 @@
 **Version**: 1.0  
 **Type**: CatBoost Classifier  
 **Task**: Binary classification for credit card default prediction  
-**Last Updated**: April 2025
+**Last Updated**: May 2025
 
 ## Intended Use
 - **Primary Use**: Predict the probability of credit card default for risk assessment
@@ -39,28 +39,16 @@
 ## Performance Metrics
 ### Overall Performance
 - Precision-Recall AUC: X.XX
-- F1 Score: X.XX
+- F1 Score: 0.4768608300437145
 - Accuracy: X.XX
 
-### Business Metrics
-- Approval Rate: XX%
-- Default Rate: XX%
-- Average Cost per Decision: $XX.XX
-- False Positive Cost (wrongly denied credit): $1.00
-- False Negative Cost (default loss): $5.00
 
-### Performance Across Groups
-- Education Level Groups:
-  - Graduate: F1 = X.XX
-  - University: F1 = X.XX
-  - High School: F1 = X.XX
-  - Other: F1 = X.XX
+### SHAP Importance
+- Demographics: 0.01888167576312615
+- Payment History: 0.02985641021288554
+- Bill Amounts: 0.03134788060088926
+- Payment Amounts: 0.02828075068369488
 
-- Age Groups:
-  - 20-30: F1 = X.XX
-  - 31-40: F1 = X.XX
-  - 41-50: F1 = X.XX
-  - 51+: F1 = X.XX
 
 ## Limitations and Biases
 
